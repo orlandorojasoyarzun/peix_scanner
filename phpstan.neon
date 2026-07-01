@@ -1,0 +1,11 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app/
+
+    level: 5
+
+    ignoreErrors:
+        # Add ignore patterns here as the project evolves.
