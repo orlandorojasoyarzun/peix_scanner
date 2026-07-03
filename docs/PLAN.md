@@ -100,9 +100,28 @@ Tablas MVP: `species`, `species_images`, `nutrition_profiles`, `recommendations`
 - [ ] Auth + reintroducir `users` y `user_id`
 - [ ] Favoritos / historial / analytics
 
+## Fase 6 — Empaquetado nativo (post-demo, decisión basada en resultado)
+- [ ] Evaluar NativePHP for Mobile (Capacitor) si el proyecto se publica en App Store / Play Store
+- [ ] Evaluar NativePHP for Desktop si se necesita versión offline
+- [ ] Requiere certificados Apple Developer ($99/año) y Play Console ($25 único)
+- [ ] **Fuera del MVP**: la webapp responsive en Railway cubre la demo
+
+---
+
+## Hosting
+- **Recomendado**: Railway (Laravel nativo, PostgreSQL incluido, HTTPS automático, deploy con git push)
+- **No recomendado para Laravel**: Vercel (PHP community builder, storage efímero, cold starts)
+- **Plan de deploy**: Fase 4 con `railway.json` + variables de entorno
+
+## Cámara en móvil
+- Webapp responsive con `getUserMedia` o `<input type="file" capture="environment">`
+- HTTPS obligatorio (Railway lo da gratis)
+- Atributo `playsinline` en `<video>` para iOS Safari
+
 ---
 
 ## Tensiones conocidas (registro)
 1. **Ollama ↔ cloud**: Ollama corre local en dev; en prod se sustituye por adapter externo. Resolver proveedor antes de Fase 4.
 2. **DDD pragmático vs completo**: disciplina modular sin ceremony. Repositories solo si duele.
 3. **Auth fuera del MVP**: `recommendations.user_id` se reintroduce en Fase 5; implica migración adicional.
+4. **NativePHP fuera del MVP**: webapp responsive es suficiente. Replantear solo si la demo gana y se quiere publicar.

@@ -90,3 +90,9 @@
 - [ ] `recommendations.user_id` reintroducido
 - [ ] Favoritos
 - [ ] Historial de scans
+
+## Fase 6 — Empaquetado nativo (post-demo, decisión basada en resultado)
+- [ ] Evaluar NativePHP for Mobile si la demo gana y se quiere publicar en stores
+- [ ] Evaluar NativePHP for Desktop si se necesita versión offline
+- [ ] Configurar certificados Apple Developer y Play Console
+- [ ] Compilar builds nativas (Android Studio / Xcode)
