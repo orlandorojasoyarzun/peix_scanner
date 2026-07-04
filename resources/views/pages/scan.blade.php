@@ -1,17 +1,37 @@
 <x-layouts.app title="Escanear pescado">
     <div class="flex flex-col gap-6">
-        <h1 class="text-xl font-bold">Foto del filete</h1>
+        @if ($errors->any())
+            <div class="rounded-2xl border-l-4 border-flame bg-flame/10 p-3">
+                <div class="text-xs font-semibold text-ink">Revisa la imagen</div>
+                @foreach ($errors->all() as $error)
+                    <div class="text-xs text-ink/70 mt-0.5">{{ $error }}</div>
+                @endforeach
+            </div>
+        @endif
 
-        <form action="{{ route('scan.store') }}" method="POST" enctype="multipart/form-data" class="flex flex-col gap-4">
+        <form
+            action="{{ route('scan.store') }}"
+            method="POST"
+            enctype="multipart/form-data"
+            class="flex flex-col gap-4"
+            x-data="{ preview: null }"
+        >
             @csrf
 
             <label
                 for="photo"
                 class="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-slate-300 rounded-2xl p-8 bg-white text-center cursor-pointer hover:border-slate-500"
             >
-                <span class="text-4xl">📷</span>
-                <span class="text-sm font-semibold text-slate-700">Toca para abrir la cámara</span>
-                <span class="text-xs text-slate-500">o elige una foto de la galería</span>
+                <template x-if="! preview">
+                    <div class="flex flex-col items-center gap-2">
+                        <span class="text-4xl">📷</span>
+                        <span class="text-sm font-semibold text-slate-700">Toca para abrir la cámara</span>
+                        <span class="text-xs text-slate-500">o elige una foto de la galería</span>
+                    </div>
+                </template>
+                <template x-if="preview">
+                    <img :src="preview" class="rounded-xl max-h-72 object-contain" alt="Preview">
+                </template>
             </label>
 
             <input
@@ -22,11 +42,14 @@
                 capture="environment"
                 class="hidden"
                 required
+                @change="
+                    const file = $event.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => preview = e.target.result;
+                    reader.readAsDataURL(file);
+                "
             >
-
-            <div id="preview" class="hidden">
-                <img id="preview-img" class="rounded-2xl w-full" alt="Preview">
-            </div>
 
             <button
                 type="submit"
@@ -38,21 +61,4 @@
 
         <a href="{{ route('home') }}" class="text-center text-sm text-slate-500">Cancelar</a>
     </div>
-
-    <script>
-        const input = document.getElementById('photo');
-        const preview = document.getElementById('preview');
-        const previewImg = document.getElementById('preview-img');
-
-        input.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                previewImg.src = ev.target.result;
-                preview.classList.remove('hidden');
-            };
-            reader.readAsDataURL(file);
-        });
-    </script>
 </x-layouts.app>

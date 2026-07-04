@@ -1,8 +1,16 @@
 <x-layouts.app title="Ficha de especie">
     <div class="flex flex-col gap-6" x-data="{ tab: 'nutrition' }">
+        @php
+            [$common, $scientific] = array_pad(explode('__', $species, 2), 2, '');
+            $common = str_replace('-', ' ', $common);
+            $scientific = str_replace('-', ' ', $scientific);
+            $commonTitle = ucwords($common);
+            $scientificItalic = ucfirst($scientific);
+        @endphp
+
         <div>
-            <h1 class="text-2xl font-bold">Ficha de especie</h1>
-            <p class="text-sm text-slate-600 mt-1">ID: {{ $species }}</p>
+            <h1 class="text-2xl font-bold">{{ $commonTitle ?: 'Especie' }}</h1>
+            <p class="text-sm text-slate-600 mt-1 italic">{{ $scientificItalic ?: $species }}</p>
         </div>
 
         <div class="flex gap-2 border-b border-slate-200">
@@ -30,7 +38,7 @@
 
         <div x-show="tab === 'nutrition'" class="rounded-2xl bg-white p-4 shadow-sm">
             <p class="text-sm text-slate-500">Información nutricional por 100 g.</p>
-            <p class="mt-3 text-xs text-slate-400">Se completará cuando conectemos las APIs externas.</p>
+            <p class="mt-3 text-xs text-slate-400">Se completará cuando conectemos las APIs externas en Fase 3.</p>
         </div>
 
         <div x-show="tab === 'sustainability'" class="rounded-2xl bg-white p-4 shadow-sm">
@@ -40,7 +48,7 @@
 
         <div x-show="tab === 'preparation'" class="rounded-2xl bg-white p-4 shadow-sm">
             <p class="text-sm text-slate-500">Recomendaciones de preparación generadas con IA.</p>
-            <p class="mt-3 text-xs text-slate-400">Se completará cuando conectemos la generación de texto.</p>
+            <p class="mt-3 text-xs text-slate-400">Se completará cuando conectemos la generación de texto en Fase 3.</p>
         </div>
 
         <a href="{{ route('home') }}" class="text-center text-sm text-slate-500">Escanear otro filete</a>
