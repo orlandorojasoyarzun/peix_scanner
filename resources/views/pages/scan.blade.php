@@ -25,8 +25,8 @@
                 <template x-if="! preview">
                     <div class="flex flex-col items-center gap-2">
                         <span class="text-4xl">📷</span>
-                        <span class="text-sm font-semibold text-slate-700">Toca para abrir la cámara</span>
-                        <span class="text-xs text-slate-500">o elige una foto de la galería</span>
+                        <span class="text-sm font-semibold text-slate-700">Toca para fotografiar el pez</span>
+                        <span class="text-xs text-slate-500">entero, en el hielo, o el filete</span>
                     </div>
                 </template>
                 <template x-if="preview">

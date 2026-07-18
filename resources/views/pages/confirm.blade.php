@@ -10,7 +10,7 @@
             <div>
                 <h1 class="text-xl font-bold">¿Es este el pez?</h1>
                 <p class="text-sm text-slate-600 mt-1">
-                    Confirma la detección antes de generar la ficha.
+                    Confirma la detección antes de generar la ficha con info nutricional y sostenibilidad.
                 </p>
             </div>
 
