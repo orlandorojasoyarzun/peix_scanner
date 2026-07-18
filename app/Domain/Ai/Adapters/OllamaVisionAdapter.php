@@ -12,6 +12,99 @@ use Illuminate\Support\Facades\Log;
 
 class OllamaVisionAdapter implements SpeciesIdentifier
 {
+    private const PROMPT = <<<'PROMPT'
+You are a fish species expert at a Mediterranean/Atlantic seafood counter. Identify the species visible in the image.
+
+Choose ONLY from this curated list of commercially available seafood:
+
+WHITE FISH (magros / lean):
+- Merluza / European hake (Merluccius merluccius)
+- Merluza negra / Senegalese hake (Merluccius senegalensis)
+- Bacalao / Atlantic cod (Gadus morhua)
+- Bacaladilla / Blue whiting (Micromesistius poutassou)
+- Carbonero / Saithe (Pollachius virens)
+- Abadejo / Pollock (Pollachius pollachius)
+- Rape blanco / White monkfish (Lophius piscatorius)
+- Rape negro / Black angler (Lophius budegassa)
+- Rodaballo / Turbot (Scophthalmus maximus)
+- Lenguado / Common sole (Solea solea)
+- Platija / European plaice (Pleuronectes platessa)
+- Congrio / Conger eel (Conger conger)
+- Cabracho / Red scorpionfish (Scorpaena scrofa)
+- Salmonete / Red mullet (Mullus sp.)
+- Gallineta / Blackbelly rosefish (Helicolenus dactylopterus)
+- Pixota (Merluccius polli)
+
+BLUE FISH (azules / oily):
+- Salmón / Atlantic salmon (Salmo salar)
+- Trucha arcoíris / Rainbow trout (Oncorhynchus mykiss)
+- Atún rojo / Bluefin tuna (Thunnus thynnus)
+- Atún claro / Yellowfin tuna (Thunnus albacares)
+- Bonito del norte / Atlantic bonito (Sarda sarda)
+- Caballa / Mackerel (Scomber scombrus)
+- Sardina / European pilchard (Sardina pilchardus)
+- Boquerón / Anchovy (Engraulis encrasicolus)
+- Jurel / Atlantic horse mackerel (Trachurus trachurus)
+- Melva / Bullet tuna (Auxis rochei)
+- Pez espada / Swordfish (Xiphias gladius)
+
+MEDITERRANEAN FARMED (piscifactoría mediterránea):
+- Lubina / European seabass (Dicentrarchus labrax)
+- Dorada / Gilthead seabream (Sparus aurata)
+- Besugo / Blackspot seabream (Pagellus bogaraveo)
+- Pargo / Common seabream (Pagrus pagrus)
+- Corvina / Meagre (Argyrosomus regius)
+- Dentón / Common dentex (Dentex dentex)
+
+COMMON IMPORTED (súper habituales):
+- Panga / Striped catfish (Pangasius hypophthalmus)
+- Tilapia / Nile tilapia (Oreochromis niloticus)
+- Fletán / Atlantic halibut (Hippoglossus hippoglossus)
+
+CEPHALOPODS (cefalópodos):
+- Sepia / Common cuttlefish (Sepia officinalis)
+- Choco / Broadclub cuttlefish (Sepia elegans)
+- Calamar / European squid (Loligo vulgaris)
+- Pulpo / Common octopus (Octopus vulgaris)
+- Pulpito / Horned octopus (Eledone cirrhosa)
+
+CRUSTACEANS (crustáceos):
+- Gamba / Red shrimp (Aristeus antennatus)
+- Langostino / Tiger prawn (Penaeus monodon)
+- Cigala / Norway lobster (Nephrops norvegicus)
+- Bogavante / European lobster (Homarus gammarus)
+- Langosta / Spiny lobster (Palinurus sp.)
+- Buey de mar / Edible crab (Cancer pagurus)
+- Centollo / Spider crab (Maja squinado)
+- Nécora / Velvet crab (Necora puber)
+
+SHELLFISH (moluscos bivalvos):
+- Mejillón / Blue mussel (Mytilus edulis)
+- Almeja / Common clam (Ruditapes decussatus)
+- Vieira / Great scallop (Pecten maximus)
+- Ostra / European flat oyster (Ostrea edulis)
+- Berberecho / Common cockle (Cerastoderma edule)
+- Navaja / Razor clam (Ensis siliqua)
+
+FRESHWATER (raros pero por si acaso):
+- Trucha común / Brown trout (Salmo trutta)
+- Carpa / Common carp (Cyprinus carpio)
+- Perca / European perch (Perca fluviatilis)
+
+Answer with the TOP 3 most likely candidates, ordered by confidence (highest first). Format each on a separate line:
+Scientific_name (English name), confidence
+Scientific_name (English name), confidence
+Scientific_name (English name), confidence
+
+Example:
+Salmo salar (Atlantic salmon), 0.92
+Oncorhynchus mykiss (Rainbow trout), 0.45
+Gadus morhua (Atlantic cod), 0.20
+
+If you cannot identify the seafood confidently from the list, answer a single line:
+unknown (unknown), 0
+PROMPT;
+
     public function __construct(
         private readonly string $host,
         private readonly string $model,
@@ -25,15 +118,10 @@ class OllamaVisionAdapter implements SpeciesIdentifier
 
         $imageBase64 = base64_encode((string) file_get_contents($imagePath));
 
-        $prompt = 'You are a fish species expert. Look at the raw fillet in the image and identify the species. '
-            .'Answer with ONE line in this exact format: "Scientific name (Common name), confidence" where confidence is a number from 0.0 to 1.0. '
-            .'Example: "Salmo salar (Atlantic salmon), 0.92". '
-            .'If you cannot identify the species, answer: "unknown (unknown), 0".';
-
         try {
-            $response = Http::timeout(120)->post(rtrim($this->host, '/').'/api/generate', [
+            $response = Http::timeout(180)->post(rtrim($this->host, '/').'/api/generate', [
                 'model' => $this->model,
-                'prompt' => $prompt,
+                'prompt' => self::PROMPT,
                 'images' => [$imageBase64],
                 'stream' => false,
                 'options' => [
@@ -65,17 +153,18 @@ class OllamaVisionAdapter implements SpeciesIdentifier
     }
 
     /**
-     * Parse responses like:
+     * Parses multi-line responses (top 3 candidates) like:
      *   "Salmo salar (Atlantic salmon), 0.92"
-     *   "Gadus morhua (Atlantic cod), 0.85"
-     *   "unknown (unknown), 0"
-     * The model may also return verbose responses with extra text;
-     * we scan every line and take the first one that matches the pattern.
+     *   "Oncorhynchus mykiss (Rainbow trout), 0.45"
+     *   "Gadus morhua (Atlantic cod), 0.20"
+     * The first candidate becomes the primary result, the rest go into `candidates`.
      */
     private function parseResponse(string $body): ?IdentificationResult
     {
         $body = trim($body);
         $lines = preg_split('/\R/', $body) ?: [$body];
+
+        $parsed = [];
 
         foreach ($lines as $line) {
             $line = trim($line);
@@ -95,13 +184,24 @@ class OllamaVisionAdapter implements SpeciesIdentifier
                 continue;
             }
 
-            return new IdentificationResult(
-                scientificName: $scientific,
-                commonName: $common,
-                confidence: max(0, min(1, $confidence)),
-            );
+            $parsed[] = [
+                'scientific_name' => $scientific,
+                'common_name' => $common,
+                'confidence' => max(0, min(1, $confidence)),
+            ];
         }
 
-        return null;
+        if ($parsed === []) {
+            return null;
+        }
+
+        $top = $parsed[0];
+
+        return new IdentificationResult(
+            scientificName: $top['scientific_name'],
+            commonName: $top['common_name'],
+            confidence: $top['confidence'],
+            candidates: $parsed,
+        );
     }
 }
