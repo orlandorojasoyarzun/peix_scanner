@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Application\Actions\IdentifySpeciesAction;
 use App\Domain\Ai\Exceptions\IdentificationFailedException;
+use App\Domain\Ai\SpeciesTranslations;
 use App\Http\Requests\ScanImageRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Cache;
@@ -69,6 +70,12 @@ class ScanController extends Controller
         Cache::put("scan.{$scanId}.result", [
             'scientific_name' => $result->scientificName,
             'common_name' => $result->commonName,
+            'common_name_local' => $this->cleanSpanishName(
+                $result->commonNameLocal !== ''
+                    ? $result->commonNameLocal
+                    : (SpeciesTranslations::toSpanish($result->commonName) ?? ucfirst($result->commonName))
+            ),
+            'regional_names' => $result->regionalNames,
             'confidence' => $result->confidence,
             'high_confidence' => $result->isHighConfidence(),
         ], now()->addMinutes(10));
@@ -103,11 +110,31 @@ class ScanController extends Controller
 
         $speciesParam = Str::slug($result['common_name']).'__'.Str::slug($result['scientific_name']);
 
+        Cache::put("species.{$speciesParam}.result", [
+            'scientific_name' => $result['scientific_name'],
+            'common_name' => $result['common_name'],
+            'common_name_local' => $this->cleanSpanishName($result['common_name_local'] ?? ''),
+            'regional_names' => $result['regional_names'] ?? [],
+            'image_path' => Cache::get("scan.{$scan}.image"),
+        ], now()->addMinutes(30));
+
         return redirect()->route('species.show', $speciesParam);
     }
 
     public function show(string $species): View
     {
         return view('pages.species', ['species' => $species]);
+    }
+
+    /**
+     * Strip stray "ALT:" / "ATL:" tokens or anything that follows them,
+     * so a leaked regional line never appears inside the local name field.
+     */
+    private function cleanSpanishName(string $name): string
+    {
+        $name = (string) preg_replace('/\s*(?:ALT|ATL):.*$/iu', '', $name);
+        $name = trim(preg_replace('/\s+/', ' ', $name) ?? '');
+
+        return $name;
     }
 }
