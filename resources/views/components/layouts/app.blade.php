@@ -14,7 +14,7 @@
 
     @livewireStyles
 </head>
-<body class="min-h-full font-sans antialiased text-slate-900">
+<body class="h-screen overflow-hidden">
     <header class="bg-gradient-to-r from-slate-900 to-slate-800 text-white">
         <div class="mx-auto max-w-screen-sm px-4 py-3 flex items-center justify-between">
             <a href="{{ route('home') }}" class="flex items-center gap-2">
@@ -23,17 +23,18 @@
                 </svg>
                 <span class="font-display text-xl font-semibold tracking-tight">Peix Scanner</span>
             </a>
-            <span class="text-[10px] uppercase tracking-widest text-slate-300 font-medium">Yuka del pescado</span>
         </div>
     </header>
 
-    <div class="mx-auto w-full max-w-screen-sm min-h-screen bg-slate-50 flex flex-col">
-        <main class="flex-1 mx-auto w-full max-w-screen-sm px-4 pt-6 pb-6">
+    <div class="mx-auto w-full max-w-screen-sm flex-1 bg-slate-50 flex flex-col overflow-hidden">
+        <main class="flex-1 overflow-y-auto px-4 pt-6 pb-4">
             {{ $slot }}
         </main>
 
-        <footer class="mx-auto w-full max-w-screen-sm px-4 py-6 text-center text-xs text-slate-400">
-            MVP demo · Peix Scanner
+        <footer class="fixed bottom-0 inset-x-0 z-10 bg-white border-t border-slate-200 py-3">
+            <div class="mx-auto max-w-screen-sm px-4 text-center text-xs text-slate-500">
+                MVP demo · Peix Scanner
+            </div>
         </footer>
     </div>
 
