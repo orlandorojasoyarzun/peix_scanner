@@ -47,13 +47,17 @@
                 @endif
             </div>
 
-            <form action="{{ route('scan.confirm.store', $scan) }}" method="POST" class="flex flex-col gap-3">
+            <form action="{{ route('scan.confirm.store', $scan) }}" method="POST" class="flex flex-col gap-3" x-data="{ submitting: false }" @submit="submitting = true">
                 @csrf
                 <button
                     type="submit"
-                    class="rounded-2xl bg-emerald-600 text-white px-6 py-4 text-base font-semibold"
+                    :disabled="submitting"
+                    class="rounded-2xl bg-emerald-600 text-white px-6 py-4 text-base font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                    Sí, es este
+                    <span x-show="! submitting" x-cloak>Sí, es este</span>
+                    <span x-show="submitting" x-cloak class="flex items-center justify-center gap-2">
+                        <x-loading label="Generando ficha" />
+                    </span>
                 </button>
             </form>
 

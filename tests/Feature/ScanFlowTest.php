@@ -59,7 +59,8 @@ it('processes a fish scan end-to-end: upload, identify, confirm, show', function
 
     $speciesPage = $this->get(route('species.show', $speciesParam));
     $speciesPage->assertOk();
-    $speciesPage->assertSee('Atlantic Salmon');
+    $speciesPage->assertSee('Salmón atlántico');
+    $speciesPage->assertSee('Atlantic salmon');
     $speciesPage->assertSee('Salmo salar');
 });
 

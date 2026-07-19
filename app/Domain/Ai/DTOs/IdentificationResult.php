@@ -7,14 +7,21 @@ namespace App\Domain\Ai\DTOs;
 final readonly class IdentificationResult
 {
     /**
-     * @param  list<array{scientific_name: string, common_name: string, confidence: float}>  $candidates
-     *                                                                                                    Ordered by confidence (highest first). The first entry equals the top identification.
+     * @param  list<array{
+     *     scientific_name: string,
+     *     common_name: string,
+     *     common_name_local: string,
+     *     regional_names: list<string>,
+     *     confidence: float
+     * }>  $candidates  Ordered by confidence (highest first). The first entry equals the top identification.
      */
     public function __construct(
         public string $scientificName,
         public string $commonName,
-        public float $confidence,
+        public float $confidence = 0,
+        public string $commonNameLocal = '',
         public array $candidates = [],
+        public array $regionalNames = [],
     ) {}
 
     public function isHighConfidence(float $threshold = 0.75): bool
@@ -23,7 +30,13 @@ final readonly class IdentificationResult
     }
 
     /**
-     * @return array{scientific_name: string, common_name: string, confidence: float}|null
+     * @return array{
+     *     scientific_name: string,
+     *     common_name: string,
+     *     common_name_local: string,
+     *     regional_names: list<string>,
+     *     confidence: float
+     * }|null
      */
     public function topCandidate(): ?array
     {
