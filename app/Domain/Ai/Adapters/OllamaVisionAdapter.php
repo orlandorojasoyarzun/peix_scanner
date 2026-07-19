@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
 
 class OllamaVisionAdapter implements SpeciesIdentifier
 {
-    private const PROMPT = <<<'PROMPT'
+    public const PROMPT = <<<'PROMPT'
 You are a fish species expert at a Mediterranean/Atlantic seafood counter. Identify the species visible in the image.
 
 Choose ONLY from this curated list of commercially available seafood:
