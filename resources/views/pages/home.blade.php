@@ -1,7 +1,9 @@
 <x-layouts.app title="Peix Scanner">
     <div class="flex flex-col items-center text-center gap-6 py-8">
-        <div class="w-24 h-24 rounded-full bg-slate-900 text-white flex items-center justify-center text-4xl">
-            🐟
+        <div class="w-24 h-24 rounded-full bg-slate-900 flex items-center justify-center">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Fishing">
+                <path d="M16 7a2 2 0 1 0 0-4a2 2 0 0 0 0 4m0 0v10c0 6-10 6-10 0v-4l2 2" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
         </div>
 
         <div>
