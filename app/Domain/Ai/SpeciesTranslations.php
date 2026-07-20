@@ -57,6 +57,31 @@ class SpeciesTranslations
         'nile tilapia' => 'Tilapia',
         'atlantic halibut' => 'Fletán',
 
+        // Cephalopods
+        'common cuttlefish' => 'Sepia',
+        'broadclub cuttlefish' => 'Choco',
+        'european squid' => 'Calamar',
+        'common octopus' => 'Pulpo',
+        'horned octopus' => 'Pulpito',
+
+        // Crustaceans
+        'red shrimp' => 'Gamba',
+        'tiger prawn' => 'Langostino',
+        'norway lobster' => 'Cigala',
+        'european lobster' => 'Bogavante',
+        'spiny lobster' => 'Langosta',
+        'edible crab' => 'Buey de mar',
+        'spider crab' => 'Centollo',
+        'velvet crab' => 'Nécora',
+
+        // Shellfish
+        'blue mussel' => 'Mejillón',
+        'common clam' => 'Almeja',
+        'great scallop' => 'Vieira',
+        'european flat oyster' => 'Ostra',
+        'common cockle' => 'Berberecho',
+        'razor clam' => 'Navaja',
+
         // Freshwater
         'brown trout' => 'Trucha común',
         'common carp' => 'Carpa',

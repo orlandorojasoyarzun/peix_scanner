@@ -4,6 +4,8 @@ A webapp that recognises a fish fillet species from a photo. You upload an image
 
 Built as a hackathon project: a working demo that someone can open on their phone, point at the fish counter in a supermarket, take a picture, and know what they're buying.
 
+![Peix Scanner Demo](public/demo/peix_scanner_demo.gif)
+
 ---
 
 ## The problem
