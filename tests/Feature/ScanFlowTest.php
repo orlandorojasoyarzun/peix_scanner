@@ -83,7 +83,9 @@ it('requires a photo', function () {
 it('redirects home when confirming an unknown scan', function () {
     Cache::flush();
 
-    $response = $this->post(route('scan.confirm.store', 'nonexistent-id'));
+    $fakeUuid = '00000000-0000-0000-0000-000000000000';
+
+    $response = $this->post(route('scan.confirm.store', $fakeUuid));
 
     $response->assertRedirect(route('home'));
 });

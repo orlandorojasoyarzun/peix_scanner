@@ -50,8 +50,8 @@ class IdentifySpeciesAction
 
         arsort($votes);
 
-        $top = reset($votes);
+        $topKey = array_key_first($votes);
 
-        return $top['result'];
+        return $votes[$topKey]['result'];
     }
 }
