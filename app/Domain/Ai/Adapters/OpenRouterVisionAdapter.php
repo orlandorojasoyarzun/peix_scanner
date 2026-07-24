@@ -110,25 +110,26 @@ unknown (unknown), 0
 PROMPT;
 
     public const LABEL_PROMPT = <<<'PROMPT'
-You are a fish species expert at a Mediterranean/Atlantic seafood counter. Read the product label in the image and extract all visible text.
+You are reading a product label of packaged fish/seafood. Your task is to extract the fish species name written on the label.
 
-Return ONLY a single line with this exact format:
-TEXT: <all text found on the label in Spanish>
-SPECIES: <the fish or seafood species name written on the label>
-CONFIDENCE: <how confident you are that the species name is correct, between 0 and 1>
+Look carefully at the image and find the commercial species name (usually in Spanish, e.g. "Lubina", "Salmón", "Merluza", "Bacalao", "Dorada", "Rodaballo").
 
-Only write in the SPECIES field the exact species name you can read. Do not invent or suggest species not written on the label.
+Respond with EXACTLY this format, no other text before or after:
+
+SPECIES: <name>
+CONFIDENCE: <number between 0 and 1>
 
 Examples:
-TEXT: FILETE DE SALMON ATLANTICO Salmo salar
-SPECIES: Salmon atlantico
+SPECIES: Lubina
 CONFIDENCE: 0.95
 
-TEXT: MERLUZA EUROPEA Merluccius merluccius
-SPECIES: Merluza europea
+SPECIES: Salmón atlántico
 CONFIDENCE: 0.90
 
-TEXT: PESCADO VARIADO
+SPECIES: Merluza europea
+CONFIDENCE: 0.85
+
+If you cannot read a species name, respond:
 SPECIES: desconocido
 CONFIDENCE: 0.00
 PROMPT;
@@ -248,27 +249,46 @@ PROMPT;
         $body = (string) $response->json('choices.0.message.content', '');
 
         if ($body === '') {
+            \Illuminate\Support\Facades\Log::warning('OpenRouter label scan: empty body', [
+                'status' => $response->status(),
+                'raw_body' => substr($response->body(), 0, 500),
+                'json' => $response->json(),
+            ]);
             throw IdentificationFailedException::fromProvider('openrouter', 'empty response body');
         }
 
-        return $this->parseLabelResponse($body);
+        $parsed = $this->parseLabelResponse($body);
+
+        if ($parsed === null) {
+            \Illuminate\Support\Facades\Log::warning('OpenRouter label scan: parse failed', [
+                'body' => $body,
+            ]);
+        }
+
+        return $parsed;
     }
 
     private function parseLabelResponse(string $body): ?string
     {
-        $lines = preg_split('/\R/', trim($body)) ?: [$body];
-
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if (preg_match('/^SPECIES:\s*(.+)$/iu', $line, $m)) {
-                $species = trim($m[1]);
-                if ($species !== '' && strtolower($species) !== 'desconocido') {
-                    return $species;
-                }
-            }
+        if (! preg_match('/SPECIES:\s*([^\n\r]+)/iu', $body, $m)) {
+            return null;
         }
 
-        return null;
+        $species = trim($m[1]);
+
+        if (preg_match('/CONFIDENCE:\s*([\d.]+)/iu', $species, $c)) {
+            $confidence = (float) $c[1];
+            if ($confidence < 0.3) {
+                return null;
+            }
+            $species = trim(preg_replace('/\s*CONFIDENCE:.*$/iu', '', $species) ?? '');
+        }
+
+        if ($species === '' || strtolower($species) === 'desconocido') {
+            return null;
+        }
+
+        return $species;
     }
 
     private function resizeIfNeeded(string $imagePath): string

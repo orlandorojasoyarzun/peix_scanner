@@ -198,9 +198,22 @@ class SpeciesLabelMapper
             return self::MAP[$normalized];
         }
 
+        $words = preg_split('/\s+/', $normalized) ?: [];
+
         foreach (self::MAP as $key => $scientificName) {
             if (str_contains($normalized, $key) || str_contains($key, $normalized)) {
                 return $scientificName;
+            }
+        }
+
+        foreach (self::MAP as $key => $scientificName) {
+            $keyWords = preg_split('/\s+/', $key) ?: [];
+            if (count($keyWords) === 1 && strlen($keyWords[0]) >= 4) {
+                foreach ($words as $word) {
+                    if (strlen($word) >= 4 && (str_contains($word, $keyWords[0]) || str_contains($keyWords[0], $word))) {
+                        return $scientificName;
+                    }
+                }
             }
         }
 
@@ -212,6 +225,15 @@ class SpeciesLabelMapper
         $text = mb_strtolower(trim($text));
         $text = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $text);
         $text = preg_replace('/\s+/', ' ', $text);
+        $text = trim($text);
+
+        if (function_exists('iconv')) {
+            $stripped = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
+            if (is_string($stripped) && $stripped !== '') {
+                $text = preg_replace('/[^a-z0-9\s]/', '', strtolower($stripped)) ?? $text;
+                $text = preg_replace('/\s+/', ' ', $text) ?? $text;
+            }
+        }
 
         return trim($text);
     }
