@@ -28,7 +28,7 @@ class ScanImageRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'photo.required' => 'Sube una foto del filete para identificarlo.',
+            'photo.required' => 'Sube una foto del filete o de la etiqueta para identificarlo.',
             'photo.image' => 'El archivo tiene que ser una imagen.',
             'photo.mimes' => 'La imagen tiene que ser JPG, PNG o WebP.',
             'photo.max' => 'La imagen no puede pesar más de 8 MB.',
