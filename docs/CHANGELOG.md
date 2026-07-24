@@ -21,12 +21,12 @@ Registro de las sesiones de trabajo. Las sesiones más recientes arriba.
 
 **Archivos modificados:**
 - `app/Http/Controllers/ScanController.php` (fallback traducciones, cleanSpanishName, image_path)
-- `app/Domain/Ai/Adapters/OllamaVisionAdapter.php` (parser robusto, prompt top 1)
+- `app/Domain/Ai/Adapters/OllamaVisionAdapter.php` (parser robusto, prompt top 1) ← ELIMINADO
 - `app/Domain/Ai/Adapters/OpenRouterVisionAdapter.php` (timeout 180s, resize, parser)
 - `app/Domain/Ai/DTOs/IdentificationResult.php` (commonNameLocal, regionalNames)
 - `app/Domain/Ai/SpeciesTranslations.php` (NUEVO — fallback curado 35+ especies)
 - `app/Console/Commands/AiTestCommand.php` (muestra candidatos)
-- `app/Providers/AppServiceProvider.php` (binding condicional OpenRouter/Ollama)
+- `app/Providers/AppServiceProvider.php` (binding OpenRouter, Ollama eliminado)
 - `resources/css/app.css` (design system: flame, mint, display, mono)
 - `resources/views/components/layouts/app.blade.php` (header full-width, footer fixed)
 - `resources/views/components/loading.blade.php` (NUEVO — spinner SVG animado)

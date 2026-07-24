@@ -34,12 +34,7 @@ If confidence is low or the user thinks the detection is wrong, they can correct
 
 **Database**: PostgreSQL 17 running locally via DBngin. No `users` table (conscious decision: MVP has no auth, none needed).
 
-**AI**: two interchangeable adapters, chosen by environment variable.
-
-- `OllamaVisionAdapter` for local development (model runs on your Mac, no cloud dependency).
-- `OpenRouterVisionAdapter` for production (uses `nvidia/nemotron-nano-12b-v2-vl:free` from Open Router, takes 2-3 seconds per image vs 30+ seconds for Ollama locally).
-
-The adapter to use is selected in `AppServiceProvider`: if `OPENROUTER_API_KEY` is set in `.env`, it uses cloud; if not, it falls back to Ollama locally.
+**AI**: OpenRouter via `OpenRouterVisionAdapter` using `nvidia/nemotron-nano-12b-v2-vl:free` (2-3 seconds per image, free tier).
 
 **Not built yet**: FishBase integration, the text generation API for the Sustainability and Preparation tabs (currently placeholders), and an actual production deploy.
 
@@ -51,7 +46,7 @@ The adapter to use is selected in `AppServiceProvider`: if `OPENROUTER_API_KEY` 
 app/
 ├── Domain/                          ← model + business rules
 │   ├── Ai/
-│   │   ├── Adapters/                ← OllamaVisionAdapter, OpenRouterVisionAdapter
+│   │   ├── Adapters/                ← OpenRouterVisionAdapter
 │   │   ├── Contracts/               ← SpeciesIdentifier interface
 │   │   ├── DTOs/                    ← IdentificationResult
 │   │   └── SpeciesTranslations.php  ← curated fallback for 35+ species
@@ -99,7 +94,6 @@ Migrations are in `database/migrations/`. Test factories in `database/factories/
 - macOS (tested on M1/M2/M3)
 - PHP 8.4 (tested with Herd)
 - PostgreSQL 17 running locally (tested with DBngin)
-- Ollama 0.5+ (optional — only for development without OpenRouter)
 - Node 20+ and pnpm 11+
 
 ### 2. Setup
@@ -116,10 +110,7 @@ php artisan key:generate
 # Database (adjust credentials in .env)
 php artisan migrate
 
-# (Optional) To use Ollama locally
-ollama pull llama3.2-vision:11b
-
-# (Optional) To use OpenRouter
+# To use OpenRouter
 # Edit .env: OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
@@ -176,7 +167,7 @@ For commits don't trust me blindly: review before accepting. If something doesn'
 
 **What works end-to-end:**
 - Upload a fish photo
-- Species detection with AI (Ollama local or OpenRouter cloud)
+- Species detection with AI via OpenRouter
 - Spanish translation fallback when the AI doesn't return the language
 - Species confirmation
 - Card with tabs (placeholders for now)

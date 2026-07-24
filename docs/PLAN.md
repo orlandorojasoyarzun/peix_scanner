@@ -15,7 +15,7 @@
 - **Identificación**: CV real con modelo entrenado/inference.
 - **Fuente de datos**: APIs públicas (FishBase, OpenFishData, FAO).
 - **Stack**: Laravel 12 + Livewire + Volt + PostgreSQL (cerrado).
-- **CV runtime**: Ollama local en dev, API externa en prod.
+- **CV runtime**: OpenRouter (cloud) para todas las entornos.
 - **Equipo**: solo.
 - **Timeline**: 1–2 meses.
 - **Hosting demo**: cloud (Railway/Fly/Render/VPS).
@@ -75,7 +75,6 @@ Tablas MVP: `species`, `species_images`, `nutrition_profiles`, `recommendations`
 - [ ] `GenerateSpeciesInsightAction`
 - [ ] DTOs entre capas
 - [ ] Interface `AIProvider` + `SpeciesIdentifier` + `InsightGenerator`
-- [ ] `OllamaVisionAdapter` (dev)
 - [ ] `ExternalVisionAdapter` (prod) — decidir proveedor en esta fase
 - [ ] Controllers delgados
 - [ ] Vista Livewire/Volt: cámara → preview → resultado → confirmar → ficha
@@ -121,7 +120,7 @@ Tablas MVP: `species`, `species_images`, `nutrition_profiles`, `recommendations`
 ---
 
 ## Tensiones conocidas (registro)
-1. **Ollama ↔ cloud**: Ollama corre local en dev; en prod se sustituye por adapter externo. Resolver proveedor antes de Fase 4.
+1. ~~Ollama ↔ cloud~~: Eliminado. Solo OpenRouter.
 2. **DDD pragmático vs completo**: disciplina modular sin ceremony. Repositories solo si duele.
 3. **Auth fuera del MVP**: `recommendations.user_id` se reintroduce en Fase 5; implica migración adicional.
 4. **NativePHP fuera del MVP**: webapp responsive es suficiente. Replantear solo si la demo gana y se quiere publicar.

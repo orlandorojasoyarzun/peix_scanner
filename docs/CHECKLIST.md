@@ -45,15 +45,14 @@
 - [x] `GenerateSpeciesInsightAction` (definido pero no usado aún)
 - [x] DTOs entre capas
 - [x] Interface `AIProvider` + `SpeciesIdentifier` + `InsightGenerator`
-- [x] `OllamaVisionAdapter` (dev, local) con `public const PROMPT`
+- [x] `OpenRouterVisionAdapter` (cloud)
 - [x] `OpenRouterVisionAdapter` (prod, cloud) — modelo `nvidia/nemotron-nano-12b-v2-vl:free`
 - [x] `ScanImageRequest` (FormRequest) con validación
 - [x] Controllers delgados
 - [x] Layout `app.blade.php` con header full-width + footer fixed (app shell)
 - [x] 4 vistas: home (con SVG fishing), scan (con SVG camera + submit guard), confirm (con loading), species (con foto + tipografía DM Serif)
 
-## Fase 3 — IA dual + traducciones
-- [x] **OllamaVisionAdapter** (local, `llama3.2-vision:11b` por defecto)
+## Fase 3 — IA + traducciones
 - [x] **OpenRouterVisionAdapter** (cloud, NVIDIA Nemotron Nano 12B VL)
 - [x] Parser multi-línea robusto que maneja `**` markdown
 - [x] **Fallback de traducciones** vía `SpeciesTranslations.php` (35+ especies inglés → castellano)

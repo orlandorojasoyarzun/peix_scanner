@@ -8,7 +8,7 @@ class SpeciesTranslations
 {
     /**
      * Mapeo de nombre común en inglés -> nombre común en castellano.
-     * Cubre todas las especies de la lista del prompt de OllamaVisionAdapter.
+     * Cubre todas las especies de la lista del prompt de OpenRouterVisionAdapter.
      * Permite que el controller siempre tenga un nombre en castellano,
      * aunque el modelo no devuelva el formato ES: estructurado.
      */
