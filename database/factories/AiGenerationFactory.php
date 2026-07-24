@@ -19,7 +19,7 @@ class AiGenerationFactory extends Factory
     {
         return [
             'recommendation_id' => Recommendation::factory(),
-            'provider' => $this->faker->randomElement(['openai', 'ollama', 'replicate']),
+            'provider' => $this->faker->randomElement(['openai', 'openrouter', 'replicate']),
             'model' => $this->faker->randomElement(['gpt-4o', 'llava:13b', 'moondream']),
             'prompt_hash' => $this->faker->sha256(),
             'response' => $this->faker->paragraph(),

@@ -2,7 +2,7 @@
 
 App web que reconoce la especie de un filete de pescado a partir de una foto. Subes una foto, una IA (local o cloud) te dice qué pez es, te muestra una ficha con tabs de Nutrición, Sostenibilidad y Preparación.
 
-Estado: MVP funcional en `develop`. Probado localmente con PostgreSQL 17 (DBngin) y Ollama 0.5+ en macOS.
+Estado: MVP funcional en `develop`. Probado localmente con PostgreSQL 17 (DBngin) en macOS.
 
 ---
 
@@ -12,7 +12,7 @@ Estado: MVP funcional en `develop`. Probado localmente con PostgreSQL 17 (DBngin
 - **Frontend**: Blade + Alpine.js + Livewire 4 + Tailwind 4 (Vite 7, pnpm)
 - **Database**: PostgreSQL 17 vía DBngin
 - **Testing**: Pest 3.8 + Pint + Larastan
-- **IA**: Ollama (local) **o** OpenRouter (cloud) — binding condicional por env
+- **IA**: OpenRouter (cloud) via `OpenRouterVisionAdapter`
 - **Sin auth, sin `users` table, sin deploy a producción todavía**
 
 ---
@@ -45,7 +45,7 @@ Estado: MVP funcional en `develop`. Probado localmente con PostgreSQL 17 (DBngin
 ┌─────────────────────────────────────────────────────────────────────┐
 │  APPLICATION LAYER (app/Application/Actions/)                        │
 │  IdentifySpeciesAction::execute($imagePath): IdentificationResult   │
-│  └─ Orquesta: el adapter (Ollama u OpenRouter) hace la llamada      │
+│  └─ Orquesta: el adapter OpenRouter hace la llamada      │
 │     y el resultado se mapea al DTO con campos localizados            │
 └─────────────────────────────────────────────────────────────────────┘
          │
@@ -53,8 +53,7 @@ Estado: MVP funcional en `develop`. Probado localmente con PostgreSQL 17 (DBngin
 ┌─────────────────────────────────────────────────────────────────────┐
 │  DOMAIN LAYER (app/Domain/Ai/)                                       │
 │  Contracts/SpeciesIdentifier (interface)                            │
-│  ├─ OllamaVisionAdapter        (dev, local)                          │
-│  └─ OpenRouterVisionAdapter    (prod, cloud)                         │
+│  └─ OpenRouterVisionAdapter    (cloud)                               │
 │                                                                      │
 │  DTOs/IdentificationResult                                            │
 │  ├─ scientificName, commonName, commonNameLocal                      │
@@ -76,33 +75,20 @@ Estado: MVP funcional en `develop`. Probado localmente con PostgreSQL 17 (DBngin
 
 ---
 
-## IA dual: Ollama ↔ OpenRouter
+## IA: OpenRouter
 
-**Binding condicional** en `app/Providers/AppServiceProvider.php`:
+**Binding** en `app/Providers/AppServiceProvider.php`:
 
 ```php
-if (env('OPENROUTER_API_KEY') !== '') {
-    return new OpenRouterVisionAdapter(
-        apiKey: env('OPENROUTER_API_KEY'),
-        model: env('OPENROUTER_MODEL', 'nvidia/nemotron-nano-12b-v2-vl:free'),
-    );
-}
-
-return new OllamaVisionAdapter(
-    host: env('OLLAMA_HOST', 'http://localhost:11434'),
-    model: env('OLLAMA_MODEL', 'llama3.2-vision:11b'),
+return new OpenRouterVisionAdapter(
+    apiKey: env('OPENROUTER_API_KEY'),
+    model: env('OPENROUTER_MODEL', 'nvidia/nemotron-nano-12b-v2-vl:free'),
 );
 ```
 
 **Configuración vía `.env`:**
 
 ```env
-# Local (Ollama)
-OPENROUTER_API_KEY=
-OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=llama3.2-vision:11b
-
-# Cloud (OpenRouter)
 OPENROUTER_API_KEY=sk-or-v1-xxxxxxxx
 OPENROUTER_MODEL=nvidia/nemotron-nano-12b-v2-vl:free
 ```
@@ -117,7 +103,7 @@ OPENROUTER_MODEL=nvidia/nemotron-nano-12b-v2-vl:free
 
 ## Prompt compartido (curado)
 
-`OllamaVisionAdapter::PROMPT` (constante pública, también la usa `OpenRouterVisionAdapter`):
+`OpenRouterVisionAdapter::PROMPT` (constante pública):
 
 1. Identifica solo peces de la **lista curada de 35+ especies comercializables** en Mediterráneo/Atlántico
 2. Lista organizada por categorías: blancos magros, azules, piscifactoría, cefalópodos, crustáceos, moluscos, agua dulce
@@ -134,7 +120,6 @@ app/
 ├── Domain/
 │   ├── Ai/
 │   │   ├── Adapters/
-│   │   │   ├── OllamaVisionAdapter.php
 │   │   │   └── OpenRouterVisionAdapter.php
 │   │   ├── Contracts/
 │   │   │   └── SpeciesIdentifier.php
