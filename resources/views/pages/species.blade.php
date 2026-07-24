@@ -14,8 +14,7 @@
                 $displayLocal = (string) ($storedResult['common_name_local'] ?? '');
                 $displayEnglish = (string) ($storedResult['common_name'] ?? '');
                 $displayRegional = (array) ($storedResult['regional_names'] ?? []);
-                $imgPath = $storedResult['image_path'] ?? null;
-                $imageUrl = $imgPath ? Storage::url($imgPath) : null;
+                $imageUrl = $storedResult['reference_image_url'] ?? null;
             }
         @endphp
 

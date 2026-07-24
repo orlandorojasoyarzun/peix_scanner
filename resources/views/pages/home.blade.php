@@ -18,11 +18,11 @@
             href="{{ route('scan.create') }}"
             class="w-full max-w-xs rounded-2xl bg-slate-900 text-white px-6 py-4 text-base font-semibold shadow-sm hover:bg-slate-800"
         >
-            Escanear pescado
+            Iniciar
         </a>
 
         <p class="text-xs text-slate-400">
-            Funciona con peces enteros en el mostrador o filetes
+            Funciona con peces enteros en el mostrador o filetes en bandeja.
         </p>
     </div>
 </x-layouts.app>

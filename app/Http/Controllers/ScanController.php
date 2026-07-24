@@ -154,15 +154,18 @@ class ScanController extends Controller
             return redirect()->route('scan.confirm', $scanId);
         }
 
-        $localName = SpeciesTranslations::toSpanish($labelText) ?? ucfirst($labelText);
+        $cleanLabelText = trim(preg_replace('/\s*CONFIDENCE:.*$/iu', '', $labelText) ?? '');
+        $localName = SpeciesTranslations::toSpanish($cleanLabelText) ?? ucfirst($cleanLabelText);
 
         Cache::put("scan.{$scanId}.result", [
             'scientific_name' => $scientificName,
-            'common_name' => $labelText,
+            'common_name' => $cleanLabelText,
             'common_name_local' => $localName,
             'regional_names' => [],
             'confidence' => 1.0,
             'high_confidence' => true,
+            'source' => 'label',
+            'label_text' => $cleanLabelText,
         ], now()->addMinutes(10));
 
         Cache::put("scan.{$scanId}.image", $stored, now()->addMinutes(10));
@@ -176,6 +179,7 @@ class ScanController extends Controller
         $result = Cache::get("scan.{$scan}.result");
         $storedPath = Cache::get("scan.{$scan}.image");
         $error = Cache::get("scan.{$scan}.error");
+        $mode = Cache::get("scan.{$scan}.mode", 'fish');
         $imageUrl = $storedPath ? Storage::url($storedPath) : null;
         $referenceImageUrl = null;
 
@@ -189,6 +193,7 @@ class ScanController extends Controller
             'imageUrl' => $imageUrl,
             'referenceImageUrl' => $referenceImageUrl,
             'error' => $error,
+            'mode' => $mode,
         ]);
     }
 
