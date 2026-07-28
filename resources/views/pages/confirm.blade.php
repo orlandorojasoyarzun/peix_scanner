@@ -27,22 +27,37 @@
         @endif
 
         @if ($referenceImageUrl)
-        <div class="rounded-2xl overflow-hidden bg-slate-100 aspect-square">
-            <img src="{{ $referenceImageUrl }}" alt="Referencia" class="w-full h-full object-cover">
+        <div class="bg-slate-100 overflow-hidden rounded-2xl flex items-center justify-center" style="max-height: 22rem;">
+            <img src="{{ $referenceImageUrl }}" alt="Referencia" class="w-full h-auto max-h-96 object-contain">
         </div>
         @elseif ($imageUrl)
-        <div class="rounded-2xl overflow-hidden bg-slate-100 aspect-square">
-            <img src="{{ $imageUrl }}" alt="Imagen" class="w-full h-full object-cover">
+        <div class="bg-slate-100 overflow-hidden rounded-2xl flex items-center justify-center" style="max-height: 22rem;">
+            <img src="{{ $imageUrl }}" alt="Imagen" class="w-full h-auto max-h-96 object-contain">
         </div>
         @endif
 
         <div class="rounded-2xl bg-white p-4 shadow-sm">
             <div class="text-xs uppercase tracking-wide text-slate-500">Detectado</div>
-            <div class="text-lg font-semibold mt-1 capitalize">
-                {{ $result['common_name'] ?? '—' }}
-            </div>
+            @php
+                $englishName = (string) ($result['common_name'] ?? '');
+                $spanishName = (string) ($result['common_name_local'] ?? '');
+                $scientificName = (string) ($result['scientific_name'] ?? '');
+                $hasSpanish = $spanishName !== '' && strcasecmp($spanishName, $englishName) !== 0;
+            @endphp
+            @if ($hasSpanish)
+                <div class="text-lg font-semibold mt-1 text-slate-900">
+                    {{ $spanishName }}
+                </div>
+                <div class="text-sm text-slate-500 mt-0.5 capitalize">
+                    {{ $englishName }}
+                </div>
+            @else
+                <div class="text-lg font-semibold mt-1 capitalize">
+                    {{ $englishName !== '' ? $englishName : '—' }}
+                </div>
+            @endif
             <div class="text-sm text-slate-600 italic mt-0.5">
-                {{ $result['scientific_name'] ?? '—' }}
+                {{ $scientificName !== '' ? $scientificName : '—' }}
             </div>
             <div class="mt-3 flex items-center gap-2">
                 <span class="text-xs text-slate-500">Confianza</span>
@@ -70,15 +85,50 @@
                 class="rounded-2xl bg-emerald-600 text-white px-6 py-4 text-base font-semibold disabled:opacity-60 disabled:cursor-not-allowed">
                 <span x-show="! submitting" x-cloak>Sí, es este</span>
                 <span x-show="submitting" x-cloak class="flex items-center justify-center gap-2">
-                    <x-loading label="Generando ficha" />
+                    <span class="inline-block text-flame text-2xl leading-none" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
+                            <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3c4.97 0 9 4.03 9 9">
+                                <animateTransform attributeName="transform" dur="1.5s" repeatCount="indefinite" type="rotate" values="0 12 12;360 12 12"/>
+                            </path>
+                        </svg>
+                    </span>
+                    <span class="text-sm font-medium">Generando ficha</span>
                 </span>
             </button>
         </form>
 
-        <form action="{{ route('scan.rescan', $scan) }}" method="POST" class="text-center">
+        <form
+            action="{{ route('scan.rescan', $scan) }}"
+            method="POST"
+            class="rounded-2xl border border-slate-200 bg-white py-3 px-4 disabled:opacity-60"
+            x-data="{ submitting: false }"
+            @submit="submitting = true"
+        >
             @csrf
-            <button type="submit" class="text-sm text-slate-500 hover:text-slate-700">
-                No es este, reintentar
+            <button
+                type="submit"
+                :disabled="submitting"
+                class="w-full text-sm font-semibold text-emerald-700 hover:text-emerald-800 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+                <span x-show="! submitting" x-cloak class="inline-flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true">
+                        <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                        <path d="M21 3v5h-5" />
+                        <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                        <path d="M3 21v-5h5" />
+                    </svg>
+                    No es este, reintentar
+                </span>
+                <span x-show="submitting" x-cloak class="inline-flex items-center gap-2">
+                    <span class="inline-block text-emerald-700" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
+                            <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3c4.97 0 9 4.03 9 9">
+                                <animateTransform attributeName="transform" dur="1.5s" repeatCount="indefinite" type="rotate" values="0 12 12;360 12 12"/>
+                            </path>
+                        </svg>
+                    </span>
+                    Reintentando con tu imagen...
+                </span>
             </button>
         </form>
         @endif

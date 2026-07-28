@@ -14,7 +14,7 @@
 - **Entregable**: demo funcional end-to-end.
 - **Identificación**: CV real con modelo entrenado/inference.
 - **Fuente de datos**: APIs públicas (FishBase, OpenFishData, FAO).
-- **Stack**: Laravel 12 + Livewire + Volt + PostgreSQL (cerrado).
+- **Stack**: Laravel 12 + Livewire + PostgreSQL (cerrado).
 - **CV runtime**: OpenRouter (cloud) para todas las entornos.
 - **Equipo**: solo.
 - **Timeline**: 1–2 meses.
@@ -35,49 +35,47 @@ app/
   Application/
     Actions/      (casos de uso concretos)
   Http/
-    Controllers/  (delgados, ≤20 líneas)
+    Controllers/  (delgados, lógica extraída a acciones/servicios)
 docs/
   PLAN.md         (este archivo)
   CHECKLIST.md
   README.md       (creado en Fase 0)
-  architecture.md
-  domain.md
   database.md
+  MANUAL.md
+  CHANGELOG.md
+  TROUBLESHOOTING.md
 ```
 
 ---
 
 ## Fase 0 — Bootstrap
-- [ ] Laravel 12 instalado en el directorio actual
-- [ ] PostgreSQL configurado en `.env`
-- [ ] Livewire + Volt funcionando
-- [ ] Tailwind compilando (Vite)
-- [ ] Pest / Pint / PHPStan instalados
-- [ ] Esqueleto de carpetas creado
-- [ ] **Sin** migración `users`, `password_reset_tokens`, `sessions`
-- [ ] `docs/PLAN.md` y `docs/CHECKLIST.md` presentes
-- [ ] Primer commit NO se hace (queda staged)
+- [x] Laravel 12 instalado en el directorio actual
+- [x] PostgreSQL configurado en `.env`
+- [x] Livewire funcionando
+- [x] Tailwind compilando (Vite)
+- [x] Pest / Pint / PHPStan instalados
+- [x] Esqueleto de carpetas creado
+- [x] **Sin** migración `users`, `password_reset_tokens`, `sessions`
+- [x] `docs/PLAN.md` y `docs/CHECKLIST.md` presentes
 
 ## Fase 1 — Slice vertical del Dominio
 Tablas MVP: `species`, `species_images`, `nutrition_profiles`, `recommendations`, `ai_generations`.
 
-- [ ] Migraciones creadas
-- [ ] Entidad `Species` + VOs (`CommonName`, `ScientificName`, `ConfidenceScore`)
-- [ ] Entidad `NutritionProfile` (BR-003)
-- [ ] Entidad `Recommendation` ligada a Species (BR-001, BR-002). Sin `user_id`
-- [ ] Models Eloquent delgados (solo relaciones + accessors/mutators)
-- [ ] Factories
-- [ ] Tests Pest del flujo de identificación (mockeando AI)
+- [x] Migraciones creadas
+- [x] Entidad `Species`
+- [x] Entidad `NutritionProfile`
+- [x] Entidad `Recommendation` ligada a Species (sin `user_id`)
+- [x] Models Eloquent delgados
+- [x] Factories
+- [x] Tests Pest del flujo de identificación (mockeando AI)
 
 ## Fase 2 — Application + HTTP
-- [ ] `IdentifySpeciesAction`
-- [ ] `ConfirmSpeciesAction` (BR-007)
-- [ ] `GenerateSpeciesInsightAction`
-- [ ] DTOs entre capas
-- [ ] Interface `AIProvider` + `SpeciesIdentifier` + `InsightGenerator`
-- [ ] `ExternalVisionAdapter` (prod) — decidir proveedor en esta fase
-- [ ] Controllers delgados
-- [ ] Vista Livewire/Volt: cámara → preview → resultado → confirmar → ficha
+- [x] `IdentifySpeciesAction`
+- [x] DTOs entre capas
+- [x] Interface `SpeciesIdentifier`
+- [x] `OpenRouterVisionAdapter` (cloud, único provider activo)
+- [x] Controllers delgados
+- [x] Vista Blade con Alpine.js: cámara → preview → resultado → confirmar → ficha
 
 ## Fase 3 — Datos externos
 - [ ] Interface `SpeciesDataSource`

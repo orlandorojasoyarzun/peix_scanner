@@ -9,8 +9,9 @@
 - [x] Livewire 4 instalado (`composer require livewire/livewire`)
 - [x] Tailwind 4 vía Vite (preset oficial, sin Volt — se quedó en Livewire)
 - [x] `pnpm install` ejecutado con `pnpm-lock.yaml` + `pnpm-workspace.yaml`
-- [x] `pnpm run build` compila Vite sin errores (~42 KB CSS)
+- [x] `pnpm run build` compila Vite sin errores (~58 KB CSS)
 - [x] Pest 3.8 instalado (`composer require pestphp/pest --dev`)
+- [x] Alpine.js 3.x cargado vía CDN en el layout (para directivas `x-data`, `x-show`, `@click`, `@data`)
 - [x] Pint incluido en Laravel (54 files OK)
 - [x] PHPStan con Larastan 3.10 instalado y configurado
 - [x] Esqueleto `app/Domain/{Species,Nutrition,Recommendation,Ai}` creado
@@ -41,12 +42,10 @@
 
 ## Fase 2 — Application + HTTP
 - [x] `IdentifySpeciesAction` (con método `identifyBatch()` ensemble)
-- [x] `ConfirmSpeciesAction` (BR-007: el usuario confirma la especie)
-- [x] `GenerateSpeciesInsightAction` (definido pero no usado aún)
+- [x] Confirmación de especie en `ScanController::confirmStore()` (sin `ConfirmSpeciesAction` separada)
 - [x] DTOs entre capas
-- [x] Interface `AIProvider` + `SpeciesIdentifier` + `InsightGenerator`
-- [x] `OpenRouterVisionAdapter` (cloud)
-- [x] `OpenRouterVisionAdapter` (prod, cloud) — modelo `nvidia/nemotron-nano-12b-v2-vl:free`
+- [x] Interface `SpeciesIdentifier`
+- [x] `OpenRouterVisionAdapter` (cloud) — modelo `nvidia/nemotron-nano-12b-v2-vl:free`
 - [x] `ScanImageRequest` (FormRequest) con validación
 - [x] Controllers delgados
 - [x] Layout `app.blade.php` con header full-width + footer fixed (app shell)
@@ -72,28 +71,36 @@
 - [x] Footer con fondo blanco y borde superior sutil
 
 ## Fase 5 — Tests
-- [x] 12 tests Pest passing (50 assertions)
-  - 6 en `ScanFlowTest` (con mocks del adapter)
+- [x] 61 tests Pest passing (227 assertions)
+  - 18 en `ScanFlowTest` (con mocks del adapter)
   - 1 en `ScanStorageTest` (verifica storage real)
   - 5 en `SpeciesSliceTest` (dominio: persistencia, cascade, UUID, unique)
+  - 5 en `FoodDataCentralServiceTest` (parser, fallback, selección de especie)
+  - 17 en `SpeciesNutritionSeedTest` (datos curados FEN, aliases, mercury)
+  - 15 en `NutritionAdvisorTest` (UserGoal, recommendAll, dedup)
 - [x] Mock del `IdentifySpeciesAction` para evitar gastar API calls en CI
 - [x] Test "Salmón atlántico" valida el fallback castellano
+
+## Fase 7 — Datos nutricionales
+- [x] `SpeciesNutritionSeed` con 52 especies curadas de FEN (lubina, dorada, merluza, jurel, salmón, sardina, atún, cefalópodos, crustáceos, moluscos)
+- [x] Aliases regionales (chicharro → jurel)
+- [x] Notas para variantes (anchoa en salazón, dorada piscifactoría, sardina en lata)
+- [x] Alerta de mercurio para grandes depredadores (pez espada, atún rojo, bonito)
+- [x] `FoodDataCentralService` queda como fallback para especies no cubiertas por el seed
+- [x] Vista `species.blade.php` muestra vitaminas y minerales con nombres amigables
 
 ## Fase 6 — Git workflow
 - [x] Convención: **feature branches** + commits en **español** + 1 línea + PRs contra `develop`
 - [x] Mensajes commit: "Mejoras en la IA y traducciones", "Mejoras visuales y de iconos", "Tests actualizados"
-- [x] PRs creadas: #9 (fish-counter-ai-prompt), #10 (counter-focused-ui-copy), #11 (app-documentation), #12 (openrouter-adapter), #13 (ai-y-traducciones) — todas mergeadas
+- [x] PRs mergeadas: #9, #10, #11, #12, #13, #14 (footer), #15 (docs), #16 (quality), #17 #18 (label scan UX), #19 (remove Ollama)
 - [x] **`develop` protegido mínimo**: `allow_force_pushes: false`, `allow_deletions: false`, sin status checks requeridos, sin reviews requeridos
 - [x] Usuario aprueba PRs en GitHub web
 - [x] Sin push a develop (solo feature branches)
 
-## Fase 7 — Próximos pasos (no hechos aún)
-- [ ] Integrar FishBase para datos externos (Fase 3 real del plan)
-- [ ] `GenerateSpeciesInsightAction` realmente implementada (placeholder)
-- [ ] Deploy en Railway
-- [ ] InsightGenerator con OpenRouter o local para generar texto de ficha
+## Fase 8 — Próximos pasos (no hechos aún)
 - [ ] Tabs Sostenibilidad y Preparación con datos reales
+- [ ] Deploy en Railway
 - [ ] PWA manifest + service worker (instalable en móvil)
 - [ ] NativePHP for Mobile (Fase 6 del plan original)
-- [ ] Documentar API endpoints si los hubiera
 - [ ] CI con GitHub Actions
+- [ ] Integrar `users` con auth para historial de scans
