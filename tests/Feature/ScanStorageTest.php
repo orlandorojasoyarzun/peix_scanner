@@ -7,8 +7,8 @@ use App\Domain\Ai\DTOs\IdentificationResult;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
-it('saves the uploaded image to the public scan-uploads directory and returns an absolute path', function () {
-    Storage::fake('public');
+it('saves the uploaded image to the private scan-uploads directory and returns an absolute path', function () {
+    Storage::fake('local');
     $this->mock(IdentifySpeciesAction::class, function ($mock) {
         $mock->shouldReceive('execute')
             ->once()
@@ -31,5 +31,5 @@ it('saves the uploaded image to the public scan-uploads directory and returns an
     ]);
 
     $response->assertRedirect();
-    Storage::disk('public')->assertExists('scan-uploads');
+    Storage::disk('local')->assertExists('scan-uploads');
 });

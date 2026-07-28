@@ -36,7 +36,7 @@ If confidence is low or the user thinks the detection is wrong, they can correct
 
 **AI**: OpenRouter via `OpenRouterVisionAdapter` using `nvidia/nemotron-nano-12b-v2-vl:free` (2-3 seconds per image, free tier).
 
-**Not built yet**: FishBase integration, the text generation API for the Sustainability and Preparation tabs (currently placeholders), and an actual production deploy.
+**Not built yet**: FishBase integration for sustainability data, text generation for the Preparation tab (currently placeholders), and an actual production deploy.
 
 ---
 
@@ -136,12 +136,12 @@ php artisan ai:test storage/app/test-images/atlantic-salmon.jpg
 ## Tests
 
 ```bash
-./vendor/bin/pest                          # all (12 tests, 51 assertions)
+./vendor/bin/pest                          # all (61 tests, 227 assertions)
 ./vendor/bin/pest tests/Feature/ScanFlowTest.php   # one file
 ./vendor/bin/pest --filter="identifies"    # by name
 ```
 
-Tests use mocks so they don't burn API calls. Expected output: `12 passed (51 assertions)`.
+Tests use mocks so they don't burn API calls. Expected output: `61 passed (227 assertions)`.
 
 ---
 
@@ -170,7 +170,7 @@ For commits don't trust me blindly: review before accepting. If something doesn'
 - Species detection with AI via OpenRouter
 - Spanish translation fallback when the AI doesn't return the language
 - Species confirmation
-- Card with tabs (placeholders for now)
+- Card with tabs (Nutrition with real FEN data, Sustainability and Preparation still placeholders)
 - Responsive layout on mobile and desktop
 
 **What does NOT work yet:**
@@ -180,20 +180,20 @@ For commits don't trust me blindly: review before accepting. If something doesn'
 - The AI sometimes confuses similar species (hake ↔ cod, salmon ↔ trout). That's a model limitation, not a code one.
 
 **Next steps** (in priority order):
-1. FishBase integration for real nutritional data
-2. Implement `GenerateSpeciesInsightAction` with text generation
-3. Deploy on Railway (recommended: 30 min, $5/month)
-4. PWA so it installs on mobile
-5. NativePHP if the hackathon is won and we want a native app
+1. Sustainability and Preparation tabs with real data (FishBase + text generation)
+2. Deploy on Railway (recommended: 30 min, $5/month)
+3. PWA so it installs on mobile
+4. NativePHP if the hackathon is won and we want a native app
 
 ---
 
 ## Further documentation
 
 - `docs/CHANGELOG.md`: work session log
-- `docs/MANUAL.md`: detailed technical manual (data flow, dual AI, commands)
+- `docs/MANUAL.md`: detailed technical manual (data flow, IA config, commands)
 - `docs/CHECKLIST.md`: project status checklist by phase
 - `docs/PLAN.md`: original phased plan
 - `docs/database.md`: the 5 tables schema
+- `docs/TROUBLESHOOTING.md`: common issues and fixes
 
 If you read this README and come to the app for the first time, start with `docs/CHANGELOG.md` and `docs/MANUAL.md` to understand what was done and how it's organised.

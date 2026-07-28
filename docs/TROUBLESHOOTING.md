@@ -173,7 +173,7 @@ If images still fail, check:
 
 ### Symptom
 
-All 12 tests pass but the actual app fails (e.g., label scan goes to wrong route).
+Tests pass but the actual app fails in the browser (e.g., label scan goes to wrong route).
 
 ### Why this happens
 
@@ -181,10 +181,11 @@ Tests use mocked AI responses and fake file uploads. They don't test:
 - JavaScript-driven form submission
 - The `scan_type` hidden field being set correctly
 - The dynamic `form.action` change
+- The Alpine.js reactive components in the browser
 
 ### What to do
 
 1. Test manually in the browser with DevTools open
 2. Check the Network tab to see which route the form POSTs to
 3. Add `dd($request->all())` in `store()` to inspect the incoming request
-4. The `TROUBLESHOOTING.md` section on label scan routing covers the JS-dependent flow
+4. Check the Alpine.js console for errors (the app uses Alpine for reactive tab switching and explanation panel)

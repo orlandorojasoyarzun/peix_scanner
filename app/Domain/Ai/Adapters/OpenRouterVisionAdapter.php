@@ -9,6 +9,7 @@ use App\Domain\Ai\DTOs\IdentificationResult;
 use App\Domain\Ai\Exceptions\IdentificationFailedException;
 use App\Domain\Ai\ParsesVisionResponse;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class OpenRouterVisionAdapter implements SpeciesIdentifier
 {
@@ -344,6 +345,45 @@ PROMPT;
         imagedestroy($dest);
 
         return $resizedPath;
+    }
+
+    /**
+     * Genera una interpretación en texto a partir de un prompt de OpenRouter.
+     * Usado por el flujo de "Para ti" para obtener una explicación detallada del pescado.
+     */
+    public function generateText(string $prompt, int $maxTokens = 400): ?string
+    {
+        try {
+            $response = Http::timeout(20)->post(self::ENDPOINT, [
+                'model' => $this->model,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'Eres un nutricionista español. Responde en español, en 2-3 párrafos cortos, sin usar listas largas ni markdown.',
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => $prompt,
+                    ],
+                ],
+                'max_tokens' => $maxTokens,
+                'temperature' => 0.5,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('OpenRouter generateText failed', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+
+        if (! $response->successful()) {
+            Log::warning('OpenRouter generateText unsuccessful', ['status' => $response->status()]);
+
+            return null;
+        }
+
+        $body = (string) $response->json('choices.0.message.content', '');
+
+        return trim($body) !== '' ? trim($body) : null;
     }
 
     private function detectMimeType(string $path): string

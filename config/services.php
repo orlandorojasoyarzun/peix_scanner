@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'usda' => [
+        'key' => env('USDA_API_KEY'),
+    ],
+
 ];

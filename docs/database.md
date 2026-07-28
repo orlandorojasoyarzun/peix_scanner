@@ -23,13 +23,9 @@ AI-generated content is never considered the source of truth.
 
 # Initial Tables
 
-users
-
 species
 
 species_images
-
-traceability_records
 
 nutrition_profiles
 
@@ -41,39 +37,19 @@ ai_generations
 
 # Entity Relationship
 
-Users
-
-↓
-
-Recommendations
-
-↓
-
 Species
 
 ↓
 
-Traceability
+Images / Nutrition / Recommendations
 
 ↓
 
-Nutrition
-
-↓
-
-AI Generation
+AI Generation (linked to Recommendation)
 
 ---
 
 # Tables
-
-## users
-
-Purpose
-
-Registered application users.
-
----
 
 ## species
 
@@ -109,24 +85,6 @@ Columns
 
 ---
 
-## traceability_records
-
-Purpose
-
-Stores product origin.
-
-Columns
-
-- id
-- species_id
-- fishing_area
-- capture_method
-- capture_date
-- fish_market
-- created_at
-
----
-
 ## nutrition_profiles
 
 Purpose
@@ -156,7 +114,6 @@ Columns
 
 - id
 - species_id
-- user_id
 - recommendation
 - language
 - created_at
@@ -194,33 +151,21 @@ Species
 
 Species
 
-1 -> N Traceability Records
-
-Species
-
 1 -> N Recommendations
 
 Recommendation
 
 1 -> 1 AI Generation
 
-User
-
-1 -> N Recommendations
-
 ---
 
 # Future Tables
-
-favorite_species
 
 species_categories
 
 markets
 
 fisheries
-
-scan_history
 
 analytics
 

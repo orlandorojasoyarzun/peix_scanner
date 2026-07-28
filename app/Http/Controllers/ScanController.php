@@ -9,20 +9,27 @@ use App\Domain\Ai\Adapters\OpenRouterVisionAdapter;
 use App\Domain\Ai\Exceptions\IdentificationFailedException;
 use App\Domain\Ai\SpeciesLabelMapper;
 use App\Domain\Ai\SpeciesTranslations;
+use App\Domain\Nutrition\Models\NutritionProfile;
+use App\Domain\Species\Models\Species;
 use App\Http\Requests\ScanImageRequest;
+use App\Services\FoodDataCentralService;
 use App\Services\WikipediaService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
-class ScanController extends Controller
+class ScanController
 {
     public function __construct(
         private readonly WikipediaService $wikipedia,
         private readonly SpeciesLabelMapper $labelMapper,
+        private readonly FoodDataCentralService $fdc,
+        private readonly OpenRouterVisionAdapter $openRouter,
     ) {}
 
     public function home(): View
@@ -44,8 +51,8 @@ class ScanController extends Controller
         $scanId = (string) Str::uuid();
         $filename = "{$scanId}.{$extension}";
 
-        Storage::disk('public')->makeDirectory('scan-uploads');
-        $stored = $file->storeAs('scan-uploads', $filename, 'public');
+        Storage::disk('local')->makeDirectory('scan-uploads');
+        $stored = $file->storeAs('scan-uploads', $filename, 'local');
 
         if ($stored === false) {
             Log::error('Failed to store scan upload', ['scan_id' => $scanId, 'original' => $file->getClientOriginalName()]);
@@ -55,7 +62,7 @@ class ScanController extends Controller
                 ->withErrors(['photo' => 'No pudimos guardar la imagen. Inténtalo de nuevo.']);
         }
 
-        $absolutePath = Storage::disk('public')->path($stored);
+        $absolutePath = Storage::disk('local')->path($stored);
 
         if (! is_file($absolutePath)) {
             Log::error('Stored file not found on disk', ['path' => $absolutePath, 'scan_id' => $scanId]);
@@ -104,8 +111,8 @@ class ScanController extends Controller
         $scanId = (string) Str::uuid();
         $filename = "{$scanId}.{$extension}";
 
-        Storage::disk('public')->makeDirectory('scan-uploads');
-        $stored = $file->storeAs('scan-uploads', $filename, 'public');
+        Storage::disk('local')->makeDirectory('scan-uploads');
+        $stored = $file->storeAs('scan-uploads', $filename, 'local');
 
         if ($stored === false) {
             Log::error('Failed to store label upload', ['scan_id' => $scanId, 'original' => $file->getClientOriginalName()]);
@@ -115,7 +122,7 @@ class ScanController extends Controller
                 ->withErrors(['photo' => 'No pudimos guardar la imagen. Inténtalo de nuevo.']);
         }
 
-        $absolutePath = Storage::disk('public')->path($stored);
+        $absolutePath = Storage::disk('local')->path($stored);
 
         if (! is_file($absolutePath)) {
             Log::error('Stored file not found on disk', ['path' => $absolutePath, 'scan_id' => $scanId]);
@@ -180,11 +187,15 @@ class ScanController extends Controller
         $storedPath = Cache::get("scan.{$scan}.image");
         $error = Cache::get("scan.{$scan}.error");
         $mode = Cache::get("scan.{$scan}.mode", 'fish');
-        $imageUrl = $storedPath ? Storage::url($storedPath) : null;
+        $imageUrl = $storedPath ? route('scan.image', $scan) : null;
         $referenceImageUrl = null;
 
         if ($result !== null && isset($result['scientific_name'])) {
             $referenceImageUrl = $this->wikipedia->getSpeciesImage($result['scientific_name']);
+
+            if ($referenceImageUrl !== null) {
+                Cache::put("scan.{$scan}.reference_image", $referenceImageUrl, now()->addMinutes(30));
+            }
         }
 
         return view('pages.confirm', [
@@ -206,7 +217,8 @@ class ScanController extends Controller
         }
 
         $speciesParam = Str::slug($result['common_name']).'__'.Str::slug($result['scientific_name']);
-        $referenceImageUrl = $this->wikipedia->getSpeciesImage($result['scientific_name']);
+        $referenceImageUrl = Cache::get("scan.{$scan}.reference_image")
+            ?? $this->wikipedia->getSpeciesImage($result['scientific_name']);
 
         Cache::put("species.{$speciesParam}.result", [
             'scientific_name' => $result['scientific_name'],
@@ -231,7 +243,7 @@ class ScanController extends Controller
             return redirect()->route('home');
         }
 
-        $absolutePath = Storage::disk('public')->path($storedPath);
+        $absolutePath = Storage::disk('local')->path($storedPath);
 
         if (! is_file($absolutePath)) {
             Log::error('Stored file not found on rescan', ['scan_id' => $scan, 'path' => $absolutePath]);
@@ -320,7 +332,180 @@ class ScanController extends Controller
 
     public function show(string $species): View
     {
-        return view('pages.species', ['species' => $species]);
+        $storedResult = Cache::get("species.{$species}.result");
+        $nutrition = null;
+
+        $commonLocal = is_array($storedResult) ? ($storedResult['common_name_local'] ?? null) : null;
+        $scientificName = is_array($storedResult) ? ($storedResult['scientific_name'] ?? null) : null;
+
+        if ($commonLocal !== null && $commonLocal !== '') {
+            $nutrition = $this->loadOrFetchNutrition($commonLocal, $scientificName);
+        }
+
+        $recommendations = $nutrition !== null
+            ? \App\Domain\Nutrition\NutritionAdvisor::recommendAll($nutrition)
+            : [];
+
+        $cachedExplanation = Cache::get("explain.{$species}");
+
+        return view('pages.species', [
+            'species' => $species,
+            'nutrition' => $nutrition,
+            'recommendations' => $recommendations,
+            'cached_explanation' => is_string($cachedExplanation) ? $cachedExplanation : null,
+        ]);
+    }
+
+    private function loadOrFetchNutrition(string $commonLocal, ?string $scientificName): ?array
+    {
+        $seed = \App\Domain\Nutrition\SpeciesNutritionSeed::for($commonLocal);
+
+        if ($seed !== null) {
+            return $seed;
+        }
+
+        $speciesModel = null;
+
+        if ($scientificName !== null && $scientificName !== '') {
+            try {
+                $speciesModel = Species::where('scientific_name', $scientificName)->first();
+
+                if ($speciesModel !== null && $speciesModel->nutritionProfile !== null) {
+                    return $this->formatNutrition($speciesModel->nutritionProfile);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Species lookup skipped', ['error' => $e->getMessage()]);
+            }
+        }
+
+        $data = $this->fdc->getNutritionData($commonLocal, $scientificName);
+
+        if ($data === null) {
+            return null;
+        }
+
+        if ($speciesModel !== null) {
+            try {
+                $this->persistNutritionProfile($speciesModel, $data);
+            } catch (\Throwable) {
+                // ignore persistence errors, keep showing the data
+            }
+        }
+
+        return $data;
+    }
+
+    private function formatNutrition(NutritionProfile $profile): array
+    {
+        return [
+            'calories' => (float) $profile->calories,
+            'protein' => (float) $profile->protein,
+            'fat' => (float) $profile->fat,
+            'omega3' => (float) $profile->omega3,
+            'vitamins' => $profile->vitamins ?? [],
+        ];
+    }
+
+    private function persistNutritionProfile(Species $species, array $data): void
+    {
+        $existing = NutritionProfile::where('species_id', $species->id)->first();
+
+        if ($existing !== null) {
+            return;
+        }
+
+        NutritionProfile::create([
+            'species_id' => $species->id,
+            'calories' => $data['calories'] ?? null,
+            'protein' => $data['protein'] ?? null,
+            'fat' => $data['fat'] ?? null,
+            'omega3' => $data['omega3'] ?? null,
+            'vitamins' => $data['vitamins'] ?? null,
+        ]);
+    }
+
+    /**
+     * Generate a personalized explanation via OpenRouter (optional AI path).
+     * Cached 24h per species + goal to avoid burning API calls.
+     * Returns the explanation as plain text by default, JSON if requested via AJAX.
+     */
+    public function explain(Request $request, string $species)
+    {
+        $storedResult = Cache::get("species.{$species}.result");
+        if (! is_array($storedResult)) {
+            abort(404);
+        }
+
+        $commonLocal = (string) ($storedResult['common_name_local'] ?? $storedResult['common_name'] ?? '');
+        $scientific = (string) ($storedResult['scientific_name'] ?? '');
+
+        $nutrition = $this->loadOrFetchNutrition($commonLocal, $scientific);
+
+        if ($nutrition === null) {
+            abort(404);
+        }
+
+        $cacheKey = "explain.{$species}";
+        $cached = Cache::get($cacheKey);
+        if (is_string($cached) && $cached !== '') {
+            return $this->returnExplanation($request, $cached);
+        }
+
+        $prompt = $this->buildExplanationPrompt($commonLocal, $scientific, $nutrition);
+
+        $explanation = $this->openRouter->generateText($prompt);
+
+        if ($explanation === null) {
+            $explanation = 'No se pudo generar una explicación personalizada en este momento. Las recomendaciones automáticas de arriba siguen aplicando.';
+        }
+
+        Cache::put($cacheKey, $explanation, now()->addHours(24));
+
+        return $this->returnExplanation($request, $explanation);
+    }
+
+    private function returnExplanation(Request $request, string $text)
+    {
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json(['explanation' => $text]);
+        }
+
+        return $text;
+    }
+
+    private function buildExplanationPrompt(string $commonLocal, string $scientific, array $nutrition): string
+    {
+        $lines = [];
+        $lines[] = "Pescado: {$commonLocal}" . ($scientific !== '' ? " ({$scientific})" : '');
+        $lines[] = '';
+        $lines[] = 'Datos nutricionales por 100 g:';
+        foreach (['calories', 'protein', 'fat', 'omega3'] as $field) {
+            if (isset($nutrition[$field])) {
+                $unit = $field === 'calories' ? 'kcal' : 'g';
+                $lines[] = "- {$field}: {$nutrition[$field]} {$unit}";
+            }
+        }
+        if (! empty($nutrition['vitamins'])) {
+            $vits = [];
+            foreach ($nutrition['vitamins'] as $k => $v) {
+                $vits[] = "{$k}={$v}";
+            }
+            $lines[] = "- Vitaminas: " . implode(', ', $vits);
+        }
+        if (! empty($nutrition['minerals'])) {
+            $mins = [];
+            foreach ($nutrition['minerals'] as $k => $v) {
+                $mins[] = "{$k}={$v}";
+            }
+            $lines[] = "- Minerales: " . implode(', ', $mins);
+        }
+        if (! empty($nutrition['contaminants']['methylmercury_mg_per_kg'])) {
+            $lines[] = "- Mercurio: {$nutrition['contaminants']['methylmercury_mg_per_kg']} mg/kg";
+        }
+        $lines[] = '';
+        $lines[] = 'Genera una recomendación breve (2-3 párrafos) sobre este pescado para un consumidor en España. Menciona sus puntos fuertes (aportes nutricionales, beneficios para la salud) y precauciones si las hay (mercurio, alto contenido graso). Sin listas, sin markdown, tono natural y directo.';
+
+        return implode("\n", $lines);
     }
 
     /**

@@ -12,7 +12,7 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
-    @livewireStyles
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="h-full overflow-hidden bg-slate-50">
     <div class="flex flex-col h-full">
@@ -41,7 +41,5 @@
             </div>
         </footer> --}}
     </div>
-
-    @livewireScripts
 </body>
 </html>
