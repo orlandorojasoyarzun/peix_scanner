@@ -27,3 +27,4 @@ Thumbs.db
 
 .agents/
 skills-lock.json
+.claude/
