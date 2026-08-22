@@ -143,7 +143,10 @@ PROMPT;
     public function identify(string $imagePath): IdentificationResult
     {
         if (! is_file($imagePath)) {
-            throw IdentificationFailedException::fromProvider('openrouter', "image not found at {$imagePath}");
+            throw IdentificationFailedException::fromProvider(
+                'openrouter',
+                IdentificationFailedException::REASON_IMAGE_NOT_FOUND,
+            );
         }
 
         $imagePath = $this->resizeIfNeeded($imagePath);
@@ -175,27 +178,58 @@ PROMPT;
                 'X-Title' => 'Peix Scanner',
             ])->post(self::ENDPOINT, $payload);
         } catch (\Throwable $e) {
-            throw IdentificationFailedException::fromProvider('openrouter', $e->getMessage());
+            Log::warning('OpenRouter HTTP transport error', [
+                'error_preview' => mb_substr($e->getMessage(), 0, 200),
+            ]);
+
+            throw IdentificationFailedException::fromProvider(
+                'openrouter',
+                IdentificationFailedException::REASON_HTTP_ERROR,
+                ['transport_error' => true],
+            );
         }
 
         if ($response->status() === 429) {
-            throw IdentificationFailedException::fromProvider('openrouter', 'rate limit hit (429); retry later');
+            throw IdentificationFailedException::fromProvider(
+                'openrouter',
+                IdentificationFailedException::REASON_RATE_LIMIT,
+                ['status' => 429],
+            );
         }
 
         if (! $response->successful()) {
-            throw IdentificationFailedException::fromProvider('openrouter', "HTTP {$response->status()}: {$response->body()}");
+            Log::warning('OpenRouter HTTP error response', [
+                'status' => $response->status(),
+                'body_preview' => mb_substr($response->body(), 0, 500),
+            ]);
+
+            throw IdentificationFailedException::fromProvider(
+                'openrouter',
+                IdentificationFailedException::REASON_HTTP_ERROR,
+                ['status' => $response->status()],
+            );
         }
 
         $body = (string) $response->json('choices.0.message.content', '');
 
         if ($body === '') {
-            throw IdentificationFailedException::fromProvider('openrouter', 'empty response body');
+            throw IdentificationFailedException::fromProvider(
+                'openrouter',
+                IdentificationFailedException::REASON_EMPTY_BODY,
+            );
         }
 
         $parsed = $this->parseResponse($body);
 
         if ($parsed === null) {
-            throw IdentificationFailedException::fromProvider('openrouter', "could not parse response: {$body}");
+            Log::warning('OpenRouter response parse failed', [
+                'body_preview' => mb_substr($body, 0, 500),
+            ]);
+
+            throw IdentificationFailedException::fromProvider(
+                'openrouter',
+                IdentificationFailedException::REASON_PARSE_FAILED,
+            );
         }
 
         return $parsed;
@@ -204,7 +238,10 @@ PROMPT;
     public function identifyFromLabel(string $imagePath): ?string
     {
         if (! is_file($imagePath)) {
-            throw IdentificationFailedException::fromProvider('openrouter', "image not found at {$imagePath}");
+            throw IdentificationFailedException::fromProvider(
+                'openrouter',
+                IdentificationFailedException::REASON_IMAGE_NOT_FOUND,
+            );
         }
 
         $imagePath = $this->resizeIfNeeded($imagePath);
@@ -236,15 +273,36 @@ PROMPT;
                 'X-Title' => 'Peix Scanner',
             ])->post(self::ENDPOINT, $payload);
         } catch (\Throwable $e) {
-            throw IdentificationFailedException::fromProvider('openrouter', $e->getMessage());
+            Log::warning('OpenRouter HTTP transport error', [
+                'error_preview' => mb_substr($e->getMessage(), 0, 200),
+            ]);
+
+            throw IdentificationFailedException::fromProvider(
+                'openrouter',
+                IdentificationFailedException::REASON_HTTP_ERROR,
+                ['transport_error' => true],
+            );
         }
 
         if ($response->status() === 429) {
-            throw IdentificationFailedException::fromProvider('openrouter', 'rate limit hit (429); retry later');
+            throw IdentificationFailedException::fromProvider(
+                'openrouter',
+                IdentificationFailedException::REASON_RATE_LIMIT,
+                ['status' => 429],
+            );
         }
 
         if (! $response->successful()) {
-            throw IdentificationFailedException::fromProvider('openrouter', "HTTP {$response->status()}: {$response->body()}");
+            Log::warning('OpenRouter HTTP error response', [
+                'status' => $response->status(),
+                'body_preview' => mb_substr($response->body(), 0, 500),
+            ]);
+
+            throw IdentificationFailedException::fromProvider(
+                'openrouter',
+                IdentificationFailedException::REASON_HTTP_ERROR,
+                ['status' => $response->status()],
+            );
         }
 
         $body = (string) $response->json('choices.0.message.content', '');
@@ -252,17 +310,19 @@ PROMPT;
         if ($body === '') {
             \Illuminate\Support\Facades\Log::warning('OpenRouter label scan: empty body', [
                 'status' => $response->status(),
-                'raw_body' => substr($response->body(), 0, 500),
-                'json' => $response->json(),
+                'body_preview' => mb_substr($response->body(), 0, 500),
             ]);
-            throw IdentificationFailedException::fromProvider('openrouter', 'empty response body');
+            throw IdentificationFailedException::fromProvider(
+                'openrouter',
+                IdentificationFailedException::REASON_EMPTY_BODY,
+            );
         }
 
         $parsed = $this->parseLabelResponse($body);
 
         if ($parsed === null) {
             \Illuminate\Support\Facades\Log::warning('OpenRouter label scan: parse failed', [
-                'body' => $body,
+                'body_preview' => mb_substr($body, 0, 500),
             ]);
         }
 
@@ -294,7 +354,7 @@ PROMPT;
 
     private function resizeIfNeeded(string $imagePath): string
     {
-        $imageInfo = @getimagesize($imagePath);
+        $imageInfo = $this->silently(static fn () => getimagesize($imagePath));
         if ($imageInfo === false) {
             return $imagePath;
         }
@@ -313,11 +373,11 @@ PROMPT;
         $mime = $this->detectMimeType($imagePath);
 
         if (str_contains($mime, 'png')) {
-            $source = @imagecreatefrompng($imagePath);
+            $source = $this->silently(static fn () => imagecreatefrompng($imagePath));
         } elseif (str_contains($mime, 'webp') && function_exists('imagecreatefromwebp')) {
-            $source = @imagecreatefromwebp($imagePath);
+            $source = $this->silently(static fn () => imagecreatefromwebp($imagePath));
         } else {
-            $source = @imagecreatefromjpeg($imagePath);
+            $source = $this->silently(static fn () => imagecreatefromjpeg($imagePath));
         }
 
         if ($source === false) {
@@ -370,7 +430,9 @@ PROMPT;
                 'temperature' => 0.5,
             ]);
         } catch (\Throwable $e) {
-            Log::warning('OpenRouter generateText failed', ['error' => $e->getMessage()]);
+            Log::warning('OpenRouter generateText failed', [
+                'error_preview' => mb_substr($e->getMessage(), 0, 200),
+            ]);
 
             return null;
         }
@@ -388,8 +450,28 @@ PROMPT;
 
     private function detectMimeType(string $path): string
     {
-        $mime = @mime_content_type($path);
+        $mime = $this->silently(static fn () => mime_content_type($path));
 
         return is_string($mime) && $mime !== '' ? $mime : 'image/jpeg';
+    }
+
+    /**
+     * Run a callable while suppressing PHP warnings/notices that the
+     * wrapped function would otherwise emit (e.g. GD failures on malformed
+     * images). Used in places where a user-supplied file is allowed to be
+     * invalid and we want a silent fallback instead of noisy error_log spam.
+     *
+     * Prefer this over the `@` operator — `@` hides everything including
+     * fatal errors and is flagged by static analysis.
+     */
+    private function silently(callable $fn): mixed
+    {
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            return $fn();
+        } finally {
+            restore_error_handler();
+        }
     }
 }

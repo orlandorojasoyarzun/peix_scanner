@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Support\CacheKeys;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
@@ -15,7 +16,7 @@ class WikipediaService
 
     public function getSpeciesImage(string $scientificName): ?string
     {
-        $cacheKey = "wikipedia.image.{$scientificName}";
+        $cacheKey = CacheKeys::wikipediaImage($scientificName);
 
         return Cache::remember($cacheKey, now()->addMinutes(self::CACHE_TTL_MINUTES), function () use ($scientificName): ?string {
             $slug = $this->toWikipediaSlug($scientificName);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Application\Actions\IdentifySpeciesAction;
 use App\Domain\Ai\DTOs\IdentificationResult;
 use App\Domain\Ai\Exceptions\IdentificationFailedException;
+use App\Support\CacheKeys;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 
@@ -35,7 +36,7 @@ it('processes a fish scan end-to-end: upload, identify, confirm, show', function
     preg_match('/scan\/([a-f0-9\-]+)\/confirm/', $location, $matches);
     $scanId = $matches[1];
 
-    $cached = Cache::get("scan.{$scanId}.result");
+    $cached = Cache::get(CacheKeys::scanResult($scanId));
     expect($cached)->toBeArray();
     expect($cached['scientific_name'])->toBe('salmo salar');
     expect($cached['common_name'])->toBe('Atlantic salmon');
@@ -160,7 +161,7 @@ it('shows the Spanish common name on the confirm page when it differs from Engli
     preg_match('/scan\/([a-f0-9\-]+)\/confirm/', $response->headers->get('Location'), $matches);
     $scanId = $matches[1];
 
-    $cached = Cache::get("scan.{$scanId}.result");
+    $cached = Cache::get(CacheKeys::scanResult($scanId));
 
     expect($cached)->toBeArray()
         ->and($cached['scientific_name'])->toBe('salmo salar')
@@ -239,7 +240,7 @@ it('shows an error page when AI fails to identify', function () {
     $this->mock(IdentifySpeciesAction::class, function ($mock) {
         $mock->shouldReceive('execute')
             ->once()
-            ->andThrow(new IdentificationFailedException('cannot parse model output'));
+            ->andThrow(IdentificationFailedException::fromProvider('openrouter', IdentificationFailedException::REASON_PARSE_FAILED));
     });
 
     $response = $this->post(route('scan.store'), [

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Support\CacheKeys;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -16,7 +17,7 @@ it('returns 404 when the scan has no cache keys (no ownership proof)', function 
 
 it('returns 404 when the scan has a result but no image cached', function () {
     $scanId = (string) Str::uuid();
-    Cache::put("scan.{$scanId}.result", ['scientific_name' => 'Salmo salar'], now()->addMinutes(10));
+    Cache::put(CacheKeys::scanResult($scanId), ['scientific_name' => 'Salmo salar'], now()->addMinutes(10));
 
     $response = $this->get(route('scan.image', $scanId));
 
@@ -32,7 +33,7 @@ it('serves the image bytes when the cache says the image exists', function () {
     Storage::disk('local')->put($storedPath, base64_decode(
         '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAr/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAFlf//EABQBAQAAAAAAAAAAAAAAAAAAAAr/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwBVf//Z'
     ));
-    Cache::put("scan.{$scanId}.image", $storedPath, now()->addMinutes(10));
+    Cache::put(CacheKeys::scanImage($scanId), $storedPath, now()->addMinutes(10));
 
     $response = $this->get(route('scan.image', $scanId));
 
@@ -43,7 +44,7 @@ it('serves the image bytes when the cache says the image exists', function () {
 it('returns 404 when cache points to a non-existent file', function () {
     Storage::fake('local');
     $scanId = (string) Str::uuid();
-    Cache::put("scan.{$scanId}.image", 'scan-uploads/ghost.jpg', now()->addMinutes(10));
+    Cache::put(CacheKeys::scanImage($scanId), 'scan-uploads/ghost.jpg', now()->addMinutes(10));
 
     $response = $this->get(route('scan.image', $scanId));
 

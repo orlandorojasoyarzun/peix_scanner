@@ -228,7 +228,17 @@ class SpeciesLabelMapper
         $text = trim($text);
 
         if (function_exists('iconv')) {
-            $stripped = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
+            // Suppress the warning iconv emits on unsupported charsets via
+            // a temporary error handler rather than the `@` operator, which
+            // hides fatal errors and is flagged by static analysis.
+            set_error_handler(static fn (): bool => true);
+
+            try {
+                $stripped = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
+            } finally {
+                restore_error_handler();
+            }
+
             if (is_string($stripped) && $stripped !== '') {
                 $text = preg_replace('/[^a-z0-9\s]/', '', strtolower($stripped)) ?? $text;
                 $text = preg_replace('/\s+/', ' ', $text) ?? $text;
