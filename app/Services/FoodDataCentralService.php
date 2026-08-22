@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Support\CacheKeys;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -300,11 +301,7 @@ class FoodDataCentralService
         }
 
         $config = self::SPECIES_MAP[$key];
-        $cacheKey = "usda.food.{$key}";
-
-        if ($scientificName !== null && $scientificName !== '') {
-            $cacheKey .= '.'.md5($scientificName);
-        }
+        $cacheKey = CacheKeys::usdaFood($key, $scientificName);
 
         $cached = Cache::get($cacheKey);
 
