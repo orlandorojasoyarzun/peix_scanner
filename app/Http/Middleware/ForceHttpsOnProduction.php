@@ -39,6 +39,16 @@ class ForceHttpsOnProduction
             return $next($request);
         }
 
+        // Railway's internal healthcheck probes hit /up from the proxy with
+        // X-Forwarded-Proto=http before TLS termination. Redirecting those
+        // probes to https://<host>/up breaks the healthcheck (Railway treats
+        // 301 as non-2xx and marks the replica unhealthy). The /up route
+        // exposes no user data and never sets cookies, so bypassing the
+        // upgrade for it is safe.
+        if ($request->is('up')) {
+            return $next($request);
+        }
+
         $forwardedProto = strtolower((string) $request->header('X-Forwarded-Proto', ''));
 
         // If XFP is unset or "https", the request did not arrive as plain
@@ -47,7 +57,13 @@ class ForceHttpsOnProduction
             return $next($request);
         }
 
-        $httpsUrl = 'https://' . $request->getHost() . $request->getRequestUri();
+        // Prefer X-Forwarded-Host when the proxy supplied one — building
+        // the redirect from $request->getHost() alone gives
+        // https://127.0.0.1/up when the proxy strips the public Host
+        // header on internal hops, which is exactly what we saw during
+        // the Railway healthcheck loop.
+        $host = (string) $request->header('X-Forwarded-Host', $request->getHost());
+        $httpsUrl = 'https://' . $host . $request->getRequestUri();
 
         return redirect()->to($httpsUrl, 301);
     }
