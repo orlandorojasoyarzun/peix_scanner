@@ -23,7 +23,15 @@
 # schema is identical at the application layer.
 releaseCommand = "php artisan migrate --force --no-interaction"
 
-startCommand = "php artisan octane:start --server=frankenphp --host=0.0.0.0 --port=${PORT:-8000}"
+# Octane+FrankenPHP was failing at boot with `failed to initialize
+# workers` on this MVP image — the worker doesn't reach
+# `frankenphp_handle_request()` in time, and Octane's HTTP probe to its
+# own admin endpoint raises Illuminate's StrayRequestException because
+# Http::fake() is not configured in prod. Falling back to PHP's built-in
+# dev server (`artisan serve`) for the MVP. It is single-threaded but
+# adequate for demo traffic; we can revisit Octane (or Roadrunner) once
+# the rest of the deploy pipeline (DB, secrets, healthcheck) is green.
+startCommand = "php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"
 healthcheckPath = "/up"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
