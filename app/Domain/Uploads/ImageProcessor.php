@@ -7,8 +7,10 @@ namespace App\Domain\Uploads;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Intervention\Image\Drivers\Gd\Driver as GdDriver;
+use Intervention\Image\Drivers\Imagick\Driver as ImagickDriver;
 use Intervention\Image\Encoders\JpegEncoder;
 use Intervention\Image\ImageManager;
+use Intervention\Image\Exceptions\DriverException;
 use RuntimeException;
 
 /**
@@ -129,8 +131,44 @@ final class ImageProcessor
             );
         }
 
+        // Try GD first (faster, smaller memory footprint), fall back to
+        // Imagick. The runtime that serves HTTP requests (FrankenPHP) does
+        // not always ship with the same extension set as the CLI `php`
+        // binary on the same image — Nixpacks-built PHP may lack GD while
+        // Imagick is preserved, or vice versa. We probe GD first because
+        // it's the lighter path for typical phone photos, but if either
+        // driver throws DriverException at construction time we fall
+        // through to the next.
+        $drivers = [
+            'gd' => static fn () => new GdDriver(),
+            'imagick' => static fn () => new ImagickDriver(),
+        ];
+
+        $manager = null;
+        $lastDriverError = null;
+
+        foreach ($drivers as $name => $factory) {
+            try {
+                $manager = new ImageManager($factory());
+                break;
+            } catch (DriverException $e) {
+                Log::warning('Image driver unavailable, trying next', [
+                    'driver' => $name,
+                    'error' => $e->getMessage(),
+                ]);
+                $lastDriverError = $e;
+            }
+        }
+
+        if ($manager === null) {
+            Log::error('No image driver available', [
+                'last_error' => $lastDriverError?->getMessage(),
+                'declared_mime' => $info[2] ?? null,
+            ]);
+            throw new InvalidImageException('No pudimos decodificar la imagen. Asegúrate de que sea JPG, PNG o WebP.');
+        }
+
         try {
-            $manager = new ImageManager(new GdDriver());
             $image = $manager->read($tmpPath);
         } catch (\Throwable $e) {
             Log::warning('Image decode failed', [
