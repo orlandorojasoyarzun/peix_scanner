@@ -59,6 +59,19 @@ it('bootstrap/app.php declares the production domain as trusted host', function 
         ->and($contents)->toContain('peix-scanner.up.railway.app');
 });
 
+it('bootstrap/app.php trusts healthcheck.railway.app so Railway healthchecks pass', function () {
+    $contents = file_get_contents(base_path('bootstrap/app.php'));
+
+    // Railway sends healthchecks with `Host: healthcheck.railway.app` (see
+    // https://docs.railway.com/deployments/healthchecks#healthcheck-hostname).
+    // If trustHosts() doesn't include it, Symfony throws
+    // `SuspiciousOperationException("Untrusted Host ...")` for /up, Laravel
+    // returns HTTP 400, and Railway marks the deploy "service unavailable"
+    // even though the app itself is healthy.
+    expect($contents)->toContain('trustHosts(')
+        ->and($contents)->toContain('healthcheck.railway.app');
+});
+
 it('bootstrap/app.php trusts the X-Forwarded-Proto header from Railway', function () {
     $contents = file_get_contents(base_path('bootstrap/app.php'));
 

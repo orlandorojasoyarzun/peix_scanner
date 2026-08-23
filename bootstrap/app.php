@@ -42,10 +42,21 @@ return Application::configure(basePath: dirname(__DIR__))
         // Only accept Host: headers for our actual domain. Without this,
         // an attacker who can force a Host header injection would get
         // generated absolute URLs pointing at their domain.
+        //
+        // `healthcheck.railway.app` is mandatory: Railway's deploy
+        // healthcheck sends GET /up with that exact Host header (see
+        // https://docs.railway.com/deployments/healthchecks#healthcheck-hostname).
+        // If it isn't on the allow-list, Symfony throws
+        // `SuspiciousOperationException("Untrusted Host ...")` and Laravel
+        // returns HTTP 400 — Railway treats that as "service unavailable"
+        // and marks the deploy failed even though the app is otherwise
+        // healthy (confirmed: FrankenPHP booted, migrations ran, /up route
+        // never reached the controller).
         $middleware->trustHosts(at: [
             'localhost',
             '127.0.0.1',
             'peix-scanner.up.railway.app',
+            'healthcheck.railway.app',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

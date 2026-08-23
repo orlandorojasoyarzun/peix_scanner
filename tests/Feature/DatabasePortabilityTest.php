@@ -91,10 +91,14 @@ it('nutrition_profiles.vitamins uses json (not jsonb) so it stays portable', fun
     expect($contents)->not->toContain("\$table->jsonb('vitamins')");
 });
 
-it('railway.toml runs migrations before traffic via releaseCommand', function () {
+it('railway.toml runs migrations before traffic via startCommand', function () {
     $toml = file_get_contents(base_path('railway.toml'));
 
-    expect($toml)->toContain('releaseCommand');
+    // Migrations run inside startCommand (before FrankenPHP binds :8080),
+    // so the container is not accepting traffic until the schema is
+    // current. releaseCommand runs only on Railway's release phase — too
+    // late if migrations throw on first boot.
+    expect($toml)->toContain('startCommand');
     expect($toml)->toContain('migrate --force');
 
     // --force is required: Laravel refuses to run migrate in production
