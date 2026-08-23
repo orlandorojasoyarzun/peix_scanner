@@ -6,6 +6,8 @@ namespace App\Providers;
 
 use App\Domain\Ai\Adapters\OpenRouterVisionAdapter;
 use App\Domain\Ai\Contracts\SpeciesIdentifier;
+use App\Domain\Ai\Support\OpenRouterCircuitBreaker;
+use App\Support\ScanStateStore;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -34,9 +36,18 @@ class AppServiceProvider extends ServiceProvider
 
     public function register(): void
     {
+        $this->app->singleton(OpenRouterCircuitBreaker::class, function ($app) {
+            return new OpenRouterCircuitBreaker($app->make('cache')->store());
+        });
+
+        $this->app->singleton(ScanStateStore::class, function ($app) {
+            return new ScanStateStore($app->make('cache')->store());
+        });
+
         $factory = fn () => new OpenRouterVisionAdapter(
             apiKey: (string) env('OPENROUTER_API_KEY'),
             model: (string) env('OPENROUTER_MODEL', 'nvidia/nemotron-nano-12b-v2-vl:free'),
+            breaker: $this->app->make(OpenRouterCircuitBreaker::class),
         );
 
         $this->app->bind(SpeciesIdentifier::class, $factory);

@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Support\CacheKeys;
-use Illuminate\Support\Facades\Cache;
+use App\Support\ScanStateStore;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -15,10 +14,10 @@ use Symfony\Component\HttpFoundation\Response;
  * Serves uploaded scan images from the private disk.
  *
  * Until auth is added, "ownership" is approximated by requiring the scan's
- * cache key (scan.{uuid}.result|image|mode|error) to exist. Anyone who can
- * produce the UUID has access, but UUIDs are generated server-side and only
- * returned to the user that uploaded them, so leakage is bounded to the
- * same threat model as the rest of the cache-as-session flow.
+ * state slot (scan.{uuid}.state) to exist. Anyone who can produce the UUID
+ * has access, but UUIDs are generated server-side and only returned to the
+ * user that uploaded them, so leakage is bounded to the same threat model
+ * as the rest of the cache-as-session flow.
  */
 class ScanImageController
 {
@@ -30,17 +29,23 @@ class ScanImageController
      */
     private const ALLOWED_PATH_PREFIX = 'scan-uploads/';
 
+    public function __construct(
+        private readonly ScanStateStore $scanState,
+    ) {}
+
     public function show(string $scan): Response
     {
-        $hasSession = Cache::has(CacheKeys::scanImage($scan))
-            || Cache::has(CacheKeys::scanResult($scan))
-            || Cache::has(CacheKeys::scanError($scan));
+        $state = $this->scanState->get($scan);
 
-        if (! $hasSession) {
+        if ($state === null) {
             abort(404);
         }
 
-        $storedPath = Cache::get(CacheKeys::scanImage($scan));
+        $storedPath = $state['image'] ?? null;
+
+        if (! is_string($storedPath) || $storedPath === '') {
+            abort(404);
+        }
 
         if (! is_string($storedPath) || $storedPath === '') {
             abort(404);

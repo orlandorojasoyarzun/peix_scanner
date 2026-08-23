@@ -26,6 +26,27 @@ final class CacheKeys
     // Per-scan transient state
     // ------------------------------------------------------------------
 
+    /**
+     * Atomic, single-slot cache for everything related to a scan in
+     * flight: the upload path, the mode (fish | label), the result or
+     * the error, and (once resolved) the reference image URL.
+     *
+     * Writing everything at once closes the partial-read window: when
+     * confirm() reads the state, it either gets the whole record or
+     * nothing — never a half-written mix that would render as "image
+     * uploaded but no result yet".
+     *
+     * The legacy keys (scanResult / scanImage / scanMode / scanError /
+     * scanReferenceImage) are still produced by their accessors for
+     * backward compatibility with older code paths, but new code MUST
+     * use scanState() + ScanState so there is exactly one read and one
+     * write per scan.
+     */
+    public static function scanState(string $uuid): string
+    {
+        return "scan.{$uuid}.state";
+    }
+
     public static function scanResult(string $uuid): string
     {
         return "scan.{$uuid}.result";

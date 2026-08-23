@@ -77,14 +77,20 @@
             @endif
         </div>
 
-        <form action="{{ route('scan.confirm.store', $scan) }}" method="POST" class="flex flex-col gap-3" x-data="{ submitting: false }" @submit="submitting = true">
+        <form
+            id="confirm-form"
+            action="{{ route('scan.confirm.store', $scan) }}"
+            method="POST"
+            class="flex flex-col gap-3"
+        >
             @csrf
             <button
                 type="submit"
-                :disabled="submitting"
-                class="rounded-2xl bg-emerald-600 text-white px-6 py-4 text-base font-semibold disabled:opacity-60 disabled:cursor-not-allowed">
-                <span x-show="! submitting" x-cloak>Sí, es este</span>
-                <span x-show="submitting" x-cloak class="flex items-center justify-center gap-2">
+                id="confirm-submit"
+                class="rounded-2xl bg-emerald-600 text-white px-6 py-4 text-base font-semibold"
+            >
+                <span id="confirm-submit-label">Sí, es este</span>
+                <span id="confirm-submit-busy" class="flex items-center justify-center gap-2">
                     <span class="inline-block text-flame text-2xl leading-none" aria-hidden="true">
                         <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
                             <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3c4.97 0 9 4.03 9 9">
@@ -98,19 +104,18 @@
         </form>
 
         <form
+            id="rescan-form"
             action="{{ route('scan.rescan', $scan) }}"
             method="POST"
-            class="rounded-2xl border border-slate-200 bg-white py-3 px-4 disabled:opacity-60"
-            x-data="{ submitting: false }"
-            @submit="submitting = true"
+            class="rounded-2xl border border-slate-200 bg-white py-3 px-4"
         >
             @csrf
             <button
                 type="submit"
-                :disabled="submitting"
-                class="w-full text-sm font-semibold text-emerald-700 hover:text-emerald-800 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                id="rescan-submit"
+                class="w-full text-sm font-semibold text-emerald-700 hover:text-emerald-800 flex items-center justify-center gap-2"
             >
-                <span x-show="! submitting" x-cloak class="inline-flex items-center gap-2">
+                <span id="rescan-submit-label" class="inline-flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true">
                         <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
                         <path d="M21 3v5h-5" />
@@ -119,7 +124,7 @@
                     </svg>
                     No es este, reintentar
                 </span>
-                <span x-show="submitting" x-cloak class="inline-flex items-center gap-2">
+                <span id="rescan-submit-busy" class="inline-flex items-center gap-2">
                     <span class="inline-block text-emerald-700" aria-hidden="true">
                         <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
                             <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3c4.97 0 9 4.03 9 9">

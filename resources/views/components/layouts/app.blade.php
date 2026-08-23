@@ -12,7 +12,13 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    {{-- Alpine.js bundled locally with a pinned SHA384 hash so the browser
+         refuses to execute a tampered copy. CSP enforces this via
+         `script-src 'self' <hash>` in SecurityHeaders middleware. --}}
+    <script defer
+        src="{{ asset('vendor/alpinejs-3.14.9.min.js') }}"
+        integrity="sha384-zaqGaLZBjCeXCLnYyKyAJrDaZcsW8AqZN7iDmFDw3TzHJvhjMckT1H52jWWza0w8"
+        crossorigin="anonymous"></script>
 </head>
 <body class="h-full overflow-hidden bg-slate-50">
     <div class="flex flex-col h-full">

@@ -47,7 +47,13 @@ return [
     |
     */
 
-    'encrypt' => env('SESSION_ENCRYPT', false),
+    /*
+     * Encrypt session payload at rest. The session carries the per-user
+     * CSRF/session ID that our rate limiter keys on; treating it as a
+     * bearer token and encrypting it on the database means a stolen
+     * database dump doesn't let an attacker hijack active sessions.
+     */
+    'encrypt' => env('SESSION_ENCRYPT', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -169,7 +175,15 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    /*
+     * Auto-enable the Secure flag in production. Without it, the
+     * browser will happily send the session cookie over plain HTTP if a
+     * user types http://...; with it, only an HTTPS connection gets the
+     * cookie. Local development keeps the operator's explicit choice.
+     */
+    'secure' => env('APP_ENV') === 'production'
+        ? env('SESSION_SECURE_COOKIE', true)
+        : env('SESSION_SECURE_COOKIE', false),
 
     /*
     |--------------------------------------------------------------------------
