@@ -1,37 +1,30 @@
 # Railway service configuration.
 #
-# This file declares how Railway runs *this* service. Note that there is
-# NO `[build]` section: Railway auto-detects the builder (Railpack for
-# Node + PHP monorepos, Nixpacks as fallback). Pinning `builder =
-# "NIXPACKS"` was wrong for this repo — Nixpacks' PHP buildplan runs
-# `npm ci` for the Vite frontend, which fails because we use pnpm.
-# Letting Railway auto-detect gives us Railpack, which respects the
-# `packageManager` field in package.json.
+# This file declares how Railway runs *this* service. There is NO
+# `[build]` section: Railway auto-detects Railpack, which respects
+# `packageManager` in package.json (we use pnpm, not npm). Forcing
+# `builder = "NIXPACKS"` was wrong for this repo — Nixpacks' PHP
+# buildplan runs `npm ci` and fails because we use pnpm.
 #
-# `healthcheckPath` must be a route that returns 2xx once the app is
-# fully booted (DB reachable, caches warm). Laravel exposes `/up` for
-# exactly this purpose — see bootstrap/app.php's `health: '/up'` line.
+# There is also NO `startCommand`: we let Railpack run its PHP/Laravel
+# default (FrankenPHP via Caddy + php_server). Overriding it to
+# `php artisan serve` was the original sin — artisan serve is
+# single-threaded and slow on every cold request (~250-500ms of bootstrap
+# before Laravel even runs the route handler), so the Railway
+# healthcheck retries beat it to the wire and the deploy fails with
+# "1/1 replicas never became healthy" even though /up eventually
+# responds 200.
+#
+# FrankenPHP is multi-threaded and preloaded, so /up responds in <10ms
+# after boot. It also already runs `php artisan migrate --force`,
+# `php artisan storage:link`, `php artisan optimize` for us — that's
+# why we have no `releaseCommand` here either.
+#
+# `healthcheckPath` must point to a route that returns 2xx once the app
+# is fully booted (DB reachable, caches warm). Laravel exposes `/up`
+# for exactly this purpose — see bootstrap/app.php's `health: '/up'`.
 
 [deploy]
-# releaseCommand runs once per deploy BEFORE the new version takes traffic.
-# If `migrate --force` fails, Railway aborts the deploy and the previous
-# version keeps serving — no half-migrated schema leaks to users. We use
-# --force because Laravel refuses to migrate in production otherwise.
-#
-# This is also why SQLite is fine for local dev (migrate:fresh + tests
-# exercise the same migration files) and Postgres in production: the
-# schema is identical at the application layer.
-releaseCommand = "php artisan migrate --force --no-interaction"
-
-# Octane+FrankenPHP was failing at boot with `failed to initialize
-# workers` on this MVP image — the worker doesn't reach
-# `frankenphp_handle_request()` in time, and Octane's HTTP probe to its
-# own admin endpoint raises Illuminate's StrayRequestException because
-# Http::fake() is not configured in prod. Falling back to PHP's built-in
-# dev server (`artisan serve`) for the MVP. It is single-threaded but
-# adequate for demo traffic; we can revisit Octane (or Roadrunner) once
-# the rest of the deploy pipeline (DB, secrets, healthcheck) is green.
-startCommand = "php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"
 healthcheckPath = "/up"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
