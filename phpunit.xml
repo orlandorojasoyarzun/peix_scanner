@@ -32,5 +32,13 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!--
+            Bumped to 512M so the ImageProcessor tests can build iPhone-sized
+            fakes (a 4032x3024 imagecreatetruecolor() alone needs ~48 MB)
+            and exercise the reencode/decode/downscale pipeline. Production
+            memory_limit stays at 128M; ImageProcessor bumps it locally
+            via ini_set() only for the duration of a reencode() call.
+        -->
+        <ini name="memory_limit" value="512M"/>
     </php>
 </phpunit>

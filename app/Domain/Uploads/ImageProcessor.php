@@ -34,11 +34,23 @@ use RuntimeException;
 final class ImageProcessor
 {
     /**
-     * Hard cap on pixel count. 12 megapixels is comfortably above any
-     * camera phone's "small" setting and well below the point where
-     * GD/Imagick starts eating gigabytes.
+     * Hard cap on declared pixel count. 50 megapixels covers every
+     * modern phone (iPhone Pro 48MP, Pixel 9 Pro 50MP) and any sane
+     * camera, while staying well below the dimensions a malicious header
+     * could claim (50,000 × 50,000 = 2.5 GP would OOM the worker).
      */
-    private const MAX_PIXELS = 12_000_000;
+    private const MAX_PIXELS = 50_000_000;
+
+    /**
+     * Longest-side cap applied AFTER decode. Anything bigger gets
+     * downscaled preserving aspect ratio. Keeps memory and storage
+     * bounded regardless of how big the original was.
+     *
+     * 4096 px is enough for fish identification (most species can be
+     * told apart at far lower resolutions) and produces ~300-600 KB
+     * JPEGs at quality 80.
+     */
+    private const MAX_DIMENSION = 4096;
 
     /**
      * Re-encode quality. 80 is the sweet spot for photos — indistinguishable
@@ -53,6 +65,29 @@ final class ImageProcessor
      *                                the pixel cap, or can't be decoded
      */
     public function reencode(UploadedFile $file): array
+    {
+        // 50MP photos (iPhone Pro 48MP, Pixel 9 Pro) decode into ~200 MB
+        // of raw RGBA in GD, plus working buffers for the downscale. The
+        // default PHP memory_limit (128M) OOMs there. Bumping to 512M
+        // gives us headroom without changing the request-wide budget.
+        $previousLimit = ini_set('memory_limit', '512M');
+
+        try {
+            return $this->reencodeInner($file);
+        } finally {
+            if ($previousLimit !== false) {
+                ini_set('memory_limit', $previousLimit);
+            }
+        }
+    }
+
+    /**
+     * @return array{bytes: string, extension: 'jpg', width: int, height: int}
+     *
+     * @throws InvalidImageException the upload isn't a real image, exceeds
+     *                                the pixel cap, or can't be decoded
+     */
+    private function reencodeInner(UploadedFile $file): array
     {
         if (! $file->isValid()) {
             throw new InvalidImageException('Upload failed before reaching the processor.');
@@ -104,6 +139,21 @@ final class ImageProcessor
             ]);
 
             throw new InvalidImageException('No pudimos decodificar la imagen. Asegúrate de que sea JPG, PNG o WebP.');
+        }
+
+        // Downscale huge photos (iPhone Pro 48MP, etc.) so the JPEG we
+        // persist stays bounded. scaleDown() never enlarges, so photos
+        // smaller than the cap are passed through untouched.
+        if ($image->width() > self::MAX_DIMENSION || $image->height() > self::MAX_DIMENSION) {
+            $image->scaleDown(width: self::MAX_DIMENSION, height: self::MAX_DIMENSION);
+
+            Log::info('Image downscaled to fit max dimension', [
+                'original_width' => $width,
+                'original_height' => $height,
+                'new_width' => $image->width(),
+                'new_height' => $image->height(),
+                'max_dimension' => self::MAX_DIMENSION,
+            ]);
         }
 
         $encoded = $image->encode(new JpegEncoder(quality: self::JPEG_QUALITY));
