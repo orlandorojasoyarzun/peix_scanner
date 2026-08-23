@@ -1,15 +1,16 @@
 # Railway service configuration.
 #
-# This file is the source of truth for how Railway runs *this* service.
-# It points Nixpacks at the right commands and declares a healthcheck
-# so the orchestrator can detect a wedged dyno and restart it.
+# This file declares how Railway runs *this* service. Note that there is
+# NO `[build]` section: Railway auto-detects the builder (Railpack for
+# Node + PHP monorepos, Nixpacks as fallback). Pinning `builder =
+# "NIXPACKS"` was wrong for this repo — Nixpacks' PHP buildplan runs
+# `npm ci` for the Vite frontend, which fails because we use pnpm.
+# Letting Railway auto-detect gives us Railpack, which respects the
+# `packageManager` field in package.json.
 #
 # `healthcheckPath` must be a route that returns 2xx once the app is
 # fully booted (DB reachable, caches warm). Laravel exposes `/up` for
 # exactly this purpose — see bootstrap/app.php's `health: '/up'` line.
-
-[build]
-builder = "NIXPACKS"
 
 [deploy]
 # releaseCommand runs once per deploy BEFORE the new version takes traffic.
