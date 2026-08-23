@@ -37,33 +37,60 @@ function wireScanPage() {
         fileInput.click();
     });
 
-    fileInput.addEventListener('change', () => {
-        if (fileInput.files && fileInput.files[0]) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const box = scanType.value === 'fish' ? boxFish : boxLabel;
-                const existing = box.querySelector('.preview-img');
-                if (existing) existing.remove();
-                const icons = box.querySelector('.box-icons');
-                if (icons) icons.classList.add('hidden');
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                img.className = 'preview-img rounded-xl max-h-64 object-contain mt-2';
-                box.appendChild(img);
-            };
-            reader.readAsDataURL(fileInput.files[0]);
+    fileInput.addEventListener('change', async () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (! file) {
+            return;
         }
+
+        let toUpload = file;
+
+        // iPhones default to HEIC/HEIF for camera output. Our pipeline only
+        // accepts JPEG/PNG/WebP (GD-based reencode), so we transcode HEIC
+        // in the browser before submission. heic2any is dynamically imported
+        // so users who never upload HEIC don't pay the ~1.3 MB bundle cost.
+        if (isHeic(file)) {
+            const targetBox = scanType.value === 'fish' ? boxFish : boxLabel;
+            showConverting(targetBox);
+
+            try {
+                const heic2any = (await import('heic2any')).default;
+                const converted = await heic2any({
+                    blob: file,
+                    toType: 'image/jpeg',
+                    quality: 0.85,
+                });
+                const blob = Array.isArray(converted) ? converted[0] : converted;
+                const originalName = file.name.replace(/\.hei[cf]$/i, '.jpg');
+                toUpload = new File([blob], originalName, {type: 'image/jpeg'});
+            } catch (err) {
+                console.error('HEIC conversion failed', err);
+                clearConverting(targetBox);
+                alert('No pudimos convertir la foto HEIC. Toma una captura de pantalla o usa la opción "Más compatible" en Settings > Camera > Formats.');
+                fileInput.value = '';
+                return;
+            }
+        }
+
+        replaceFileInInput(fileInput, toUpload);
+        previewFile(toUpload, scanType.value === 'fish' ? boxFish : boxLabel);
     });
 
     // Swap the submit button into its busy state once the user actually
-    // presses it, so a double submit does not produce two scans.
+    // presses it, so a double submit does not produce two scans. We also
+    // block submit while a HEIC conversion is mid-flight (see the
+    // fileInput.dataset.busy flag set above).
     const submitBtn = document.getElementById('scan-submit');
     const submitLabel = document.getElementById('scan-submit-label');
     const submitBusy = document.getElementById('scan-submit-busy');
     const submitHint = document.getElementById('scan-hint');
 
     if (submitBtn && submitLabel && submitBusy) {
-        form.addEventListener('submit', () => {
+        form.addEventListener('submit', (e) => {
+            if (fileInput.dataset.busy === 'true') {
+                e.preventDefault();
+                return;
+            }
             submitBtn.disabled = true;
             submitBtn.classList.add('opacity-60', 'cursor-not-allowed');
             submitLabel.classList.add('hidden');
@@ -74,6 +101,72 @@ function wireScanPage() {
             if (submitHint) submitHint.classList.remove('hidden');
         });
     }
+}
+
+// True when the picked file looks like an HEIC/HEIF container. iOS Safari
+// and Chrome on Android both report `image/heic` or `image/heif`; the
+// extension check covers older iOS releases that reported `image/jpeg`
+// while still wrapping HEIF bitstreams.
+function isHeic(file) {
+    const type = (file.type || '').toLowerCase();
+    if (type === 'image/heic' || type === 'image/heif') {
+        return true;
+    }
+    return /\.hei[cf]$/i.test(file.name || '');
+}
+
+function replaceFileInInput(input, file) {
+    // The standard way to swap a file in an <input type=file> is via
+    // DataTransfer. Anything else (mutating input.files, etc.) is a no-op
+    // for security reasons.
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+}
+
+function previewFile(file, box) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const existing = box.querySelector('.preview-img');
+        if (existing) existing.remove();
+        const status = box.querySelector('.converting-status');
+        if (status) status.remove();
+        const icons = box.querySelector('.box-icons');
+        if (icons) icons.classList.add('hidden');
+        const img = document.createElement('img');
+        img.src = e.target.result;
+        img.className = 'preview-img rounded-xl max-h-64 object-contain mt-2';
+        box.appendChild(img);
+    };
+    reader.readAsDataURL(file);
+}
+
+function showConverting(box) {
+    // Mark the input as busy so the form submit handler waits, and show
+    // an inline status so the user knows something is happening (the
+    // HEIC→JPEG transcode takes 1-3 s on a phone).
+    const input = document.getElementById('photo');
+    if (input) input.dataset.busy = 'true';
+
+    clearConverting(box);
+
+    const status = document.createElement('div');
+    status.className = 'converting-status mt-2 flex items-center gap-2 text-xs text-slate-600';
+    status.innerHTML = `
+        <svg class="animate-spin h-4 w-4 text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        Convirtiendo HEIC a JPEG…
+    `;
+    box.appendChild(status);
+}
+
+function clearConverting(box) {
+    const input = document.getElementById('photo');
+    if (input) delete input.dataset.busy;
+    const status = box && box.querySelector('.converting-status');
+    if (status) status.remove();
 }
 
 // Generic "swap submit button into busy state on submit" wiring.
