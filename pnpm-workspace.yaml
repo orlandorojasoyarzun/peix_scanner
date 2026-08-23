@@ -1,0 +1,25 @@
+# pnpm workspace configuration.
+#
+# We are a single-package project (only the root package.json), but pnpm
+# needs this file to live in order to honor `allowBuilds`. Without it,
+# pnpm 11 silently redirects the setting to the workspace scope and
+# ignores what you'd put in package.json — which is exactly the trap
+# the previous `pnpm.onlyBuiltDependencies` block fell into.
+#
+# `allowBuilds` replaces `onlyBuiltDependencies` in pnpm 11 (the old
+# name was removed). Format is a map: `name: true` to approve the
+# package's install/postinstall script, `name: false` to forbid it.
+#
+# `esbuild` needs its postinstall script because the JS package is just
+# a thin wrapper around a native binary that has to be downloaded and
+# extracted on first install. Without approval, `pnpm install` exits
+# non-zero with ERR_PNPM_IGNORED_BUILDS and Railway aborts the build.
+#
+# Security note: only approve packages you actually depend on at runtime
+# AND that ship a real binary. Approving a typo'd package would do
+# nothing; approving a malicious package could execute code in CI.
+packages:
+  - "."
+
+allowBuilds:
+  esbuild: true
