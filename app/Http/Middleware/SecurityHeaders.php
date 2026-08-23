@@ -22,6 +22,8 @@ use Symfony\Component\HttpFoundation\Response;
  * CSP policy (in directive order):
  *   default-src 'self'                 — only same-origin by default
  *   script-src 'self' <alpine-sha384>  — own scripts + pinned Alpine.js
+ *       'wasm-unsafe-eval'             — heic2any compiles libheif WASM
+ *                                         (lazily loaded only on HEIC uploads)
  *   style-src 'self' 'unsafe-inline'
  *       https://fonts.googleapis.com    — own CSS, Tailwind inline, Google Fonts CSS
  *   font-src 'self' data:
@@ -29,6 +31,8 @@ use Symfony\Component\HttpFoundation\Response;
  *   img-src 'self' data:
  *       https://upload.wikimedia.org    — Wikipedia thumbnails on the ficha
  *   connect-src 'self'                 — fetch/XHR only to our own origin
+ *   worker-src 'self' blob:            — heic2any spins up a Worker for
+ *                                         the libheif transcode
  *   frame-ancestors 'none'             — modern clickjacking block
  *   form-action 'self'                 — forms can only POST to us
  *   base-uri 'self'                    — <base> cannot point elsewhere
@@ -91,11 +95,18 @@ class SecurityHeaders
 
         return implode('; ', [
             "default-src 'self'",
-            "script-src 'self' {$alpine}",
+            // 'wasm-unsafe-eval' lets heic2any compile libheif WASM when an
+            // iPhone HEIC upload is converted client-side. The library is
+            // lazy-loaded only on HEIC files, so users on other formats
+            // never trigger this branch.
+            "script-src 'self' {$alpine} 'wasm-unsafe-eval'",
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
             "font-src 'self' data: https://fonts.gstatic.com",
             "img-src 'self' data: https://upload.wikimedia.org",
             "connect-src 'self'",
+            // heic2any runs the libheif transcode inside a Worker spawned
+            // from a blob: URL.
+            "worker-src 'self' blob:",
             "frame-ancestors 'none'",
             "form-action 'self'",
             "base-uri 'self'",
