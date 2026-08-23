@@ -1,31 +1,46 @@
 # Railway service configuration.
 #
-# This file declares how Railway runs *this* service. There is NO
-# `[build]` section: Railway auto-detects Railpack, which respects
-# `packageManager` in package.json (we use pnpm, not npm). Forcing
-# `builder = "NIXPACKS"` was wrong for this repo — Nixpacks' PHP
-# buildplan runs `npm ci` and fails because we use pnpm.
+# The build is auto-detected by Railpack (PHP provider, since we have
+# composer.json + artisan). Railpack's default Laravel build pipeline
+# runs `php artisan config:cache`, `event:cache`, `route:cache`, and
+# `view:cache` at BUILD time, baking the build-time env vars into the
+# image. The build runs against `.env.example` (APP_ENV=local,
+# DB_CONNECTION=sqlite), so the baked config points at SQLite and
+# APP_DEBUG=true. At runtime on Railway, the real env vars
+# (APP_ENV=production, DB_CONNECTION=pgsql, etc.) are injected, but
+# Laravel reads the BAKED config and ignores them — every request
+# tries to open /app/database/database.sqlite (which doesn't exist),
+# throws PDOException, returns 500, and the healthcheck fails with
+# "service unavailable".
 #
-# There is also NO `startCommand`: we let Railpack run its PHP/Laravel
-# default (FrankenPHP via Caddy + php_server). Overriding it to
-# `php artisan serve` was the original sin — artisan serve is
-# single-threaded and slow on every cold request (~250-500ms of bootstrap
-# before Laravel even runs the route handler), so the Railway
-# healthcheck retries beat it to the wire and the deploy fails with
-# "1/1 replicas never became healthy" even though /up eventually
-# responds 200.
+# Fix: take ownership of `startCommand`. The PHP provider's baked
+# `/start-container.sh` is replaced with our own script that clears
+# the cached configs BEFORE the runtime env vars are read. From then
+# on, every request picks up live env vars.
 #
-# FrankenPHP is multi-threaded and preloaded, so /up responds in <10ms
-# after boot. It also already runs `php artisan migrate --force`,
-# `php artisan storage:link`, `php artisan optimize` for us — that's
-# why we have no `releaseCommand` here either.
+# We also need a `DB_URL` env var pointing at `${{Postgres.DATABASE_URL}}`
+# so Laravel parses the connection URL at runtime (Railway injects
+# `DATABASE_URL`, not the individual `DB_HOST`/`DB_PORT`/etc. vars;
+# without `DB_URL`, Laravel falls back to `DB_HOST=127.0.0.1` and
+# fails to reach the Postgres service on the internal network).
 #
-# `healthcheckPath` must point to a route that returns 2xx once the app
-# is fully booted (DB reachable, caches warm). Laravel exposes `/up`
-# for exactly this purpose — see bootstrap/app.php's `health: '/up'`.
+# `healthcheckPath` must point to a route that returns 2xx once the
+# app is fully booted (DB reachable, caches cleared). Laravel exposes
+# `/up` for exactly this purpose — see bootstrap/app.php's
+# `health: '/up'`.
 
 [deploy]
 healthcheckPath = "/up"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
+startCommand = """
+set -e
+php artisan config:clear
+php artisan event:clear
+php artisan route:clear
+php artisan view:clear
+php artisan migrate --force --no-interaction
+php artisan storage:link || true
+exec docker-php-entrypoint --config /Caddyfile --adapter caddyfile 2>&1
+"""
