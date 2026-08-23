@@ -1,5 +1,9 @@
 <x-layouts.app title="Ficha de especie">
-    <div class="flex flex-col gap-6" x-data="{ tab: 'nutricion' }">
+    <div
+        class="flex flex-col gap-6"
+        data-species-tabs
+        data-default-tab="nutricion"
+    >
         @php
             $storedResult = Cache::get("species.{$species}.result");
             [$common, $scientific] = array_pad(explode('__', $species, 2), 2, '');
@@ -51,34 +55,38 @@
         <div class="flex gap-1 bg-white rounded-xl p-1 border border-slate-200 mt-2">
             <button
                 type="button"
-                @click="tab = 'nutricion'"
-                :class="tab === 'nutricion' ? 'bg-ink text-cream shadow-sm' : 'text-slate-500 hover:text-slate-700'"
+                data-tab-button="nutricion"
+                data-tab-active-class="bg-ink text-cream shadow-sm"
+                data-tab-inactive-class="text-slate-500 hover:text-slate-700"
                 class="flex-1 px-2 py-2 text-xs font-medium text-center rounded-lg transition"
             >Nutrición</button>
 
             <button
                 type="button"
-                @click="tab = 'parati'"
-                :class="tab === 'parati' ? 'bg-ink text-cream shadow-sm' : 'text-slate-500 hover:text-slate-700'"
+                data-tab-button="parati"
+                data-tab-active-class="bg-ink text-cream shadow-sm"
+                data-tab-inactive-class="text-slate-500 hover:text-slate-700"
                 class="flex-1 px-2 py-2 text-xs font-medium text-center rounded-lg transition"
             >Para ti</button>
 
             <button
                 type="button"
-                @click="tab = 'sostenibilidad'"
-                :class="tab === 'sostenibilidad' ? 'bg-ink text-cream shadow-sm' : 'text-slate-500 hover:text-slate-700'"
+                data-tab-button="sostenibilidad"
+                data-tab-active-class="bg-ink text-cream shadow-sm"
+                data-tab-inactive-class="text-slate-500 hover:text-slate-700"
                 class="flex-1 px-2 py-2 text-xs font-medium text-center rounded-lg transition"
             >Sostenibilidad</button>
 
             <button
                 type="button"
-                @click="tab = 'preparacion'"
-                :class="tab === 'preparacion' ? 'bg-ink text-cream shadow-sm' : 'text-slate-500 hover:text-slate-700'"
+                data-tab-button="preparacion"
+                data-tab-active-class="bg-ink text-cream shadow-sm"
+                data-tab-inactive-class="text-slate-500 hover:text-slate-700"
                 class="flex-1 px-2 py-2 text-xs font-medium text-center rounded-lg transition"
             >Preparación</button>
         </div>
 
-        <div x-show="tab === 'nutricion'" x-cloak class="rounded-2xl bg-white p-4 shadow-sm border border-slate-100">
+        <div data-tab-panel="nutricion" class="rounded-2xl bg-white p-4 shadow-sm border border-slate-100">
             <p class="text-sm text-slate-700 mb-3">Información nutricional por 100 g.</p>
 
             @if ($nutrition)
@@ -189,19 +197,19 @@
         </div>
 
         @php
-            $explainData = json_encode([
+            $explainData = [
                 'url_explain' => route('species.explain', $species),
                 'csrf_token' => csrf_token(),
                 'has_cached_explanation' => ! empty($cached_explanation),
                 'cached_explanation' => $cached_explanation ?? '',
-            ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+            ];
         @endphp
 
         <div
-            x-show="tab === 'parati'"
-            x-cloak
+            data-tab-panel="parati"
+            data-explanation-panel
+            data-explanation-config='@json($explainData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)'
             class="rounded-2xl bg-white p-4 shadow-sm border border-slate-100"
-            x-data='explanationPanel(@json($explainData))'
         >
             <p class="text-sm text-slate-700 mb-3">Toda la información sobre este pescado explicada.</p>
 
@@ -212,40 +220,30 @@
             </div>
 
             <div class="mt-4 pt-3 border-t border-slate-100">
-                <template x-if="!explanation">
-                    <button
-                        type="button"
-                        @click="explainNow()"
-                        :disabled="loading"
-                        class="w-full rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 px-4 py-2.5 text-sm font-medium hover:bg-emerald-100 disabled:opacity-60 inline-flex items-center justify-center gap-2"
-                    >
-                        <span x-show="!loading" class="inline-flex items-center gap-2">
-                            <span>🪄</span>
-                            <span>Quiero una explicación personalizada</span>
-                        </span>
-                        <span x-show="loading" class="inline-flex items-center gap-2">
-                            <span class="inline-block text-emerald-600" aria-hidden="true">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
-                                    <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3c4.97 0 9 4.03 9 9">
-                                        <animateTransform attributeName="transform" dur="1.5s" repeatCount="indefinite" type="rotate" values="0 12 12;360 12 12"/>
-                                    </path>
-                                </svg>
-                            </span>
-                            <span>Pensando...</span>
-                        </span>
-                    </button>
-                </template>
+                <button
+                    type="button"
+                    data-explanation-cta
+                    class="w-full rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 px-4 py-2.5 text-sm font-medium hover:bg-emerald-100 disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                >
+                    <span data-explanation-cta-label class="inline-flex items-center gap-2">
+                        <span>🪄</span>
+                        <span>Quiero una explicación personalizada</span>
+                    </span>
+                </button>
 
-                <template x-if="explanation">
-                    <div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
-                        <div class="text-[11px] uppercase tracking-wider text-slate-500 font-bold mb-2">🪄 Interpretación personalizada</div>
-                        <p class="text-sm text-slate-700 leading-relaxed" x-text="explanationText"></p>
-                    </div>
-                </template>
+                <div data-explanation-result class="rounded-xl bg-slate-50 border border-slate-200 p-4 hidden">
+                    <div class="text-[11px] uppercase tracking-wider text-slate-500 font-bold mb-2">🪄 Interpretación personalizada</div>
+                    <p data-explanation-text class="text-sm text-slate-700 leading-relaxed"></p>
+                </div>
             </div>
         </div>
 
-        <div x-show="tab === 'preparacion'" x-cloak class="rounded-2xl bg-white p-4 shadow-sm border border-slate-100">
+        <div data-tab-panel="sostenibilidad" class="rounded-2xl bg-white p-4 shadow-sm border border-slate-100">
+            <p class="text-sm text-slate-700">Estado de la pesquería y recomendaciones de compra responsable.</p>
+            <p class="mt-3 text-xs text-slate-400">Se completará cuando conectemos el panel de sostenibilidad.</p>
+        </div>
+
+        <div data-tab-panel="preparacion" class="rounded-2xl bg-white p-4 shadow-sm border border-slate-100">
             <p class="text-sm text-slate-700">Recomendaciones de preparación generadas con IA.</p>
             <p class="mt-3 text-xs text-slate-400">Se completará cuando conectemos la generación de texto.</p>
         </div>
@@ -255,39 +253,3 @@
         </a>
     </div>
 </x-layouts.app>
-
-@verbatim
-<script>
-    function explanationPanel(configJson) {
-        var config = (typeof configJson === 'string') ? JSON.parse(configJson) : configJson;
-        return {
-            loading: false,
-            explanation: config.has_cached_explanation,
-            explanationText: config.cached_explanation,
-            config: config,
-            async explainNow() {
-                this.loading = true;
-                try {
-                    const r = await fetch(this.config.url_explain, {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRF-TOKEN': this.config.csrf_token,
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Accept': 'application/json'
-                        },
-                        credentials: 'same-origin'
-                    });
-                    const d = await r.json();
-                    this.explanation = true;
-                    this.explanationText = d.explanation;
-                } catch (e) {
-                    this.explanation = true;
-                    this.explanationText = 'No se pudo generar la explicación. Las recomendaciones automáticas siguen aplicando.';
-                } finally {
-                    this.loading = false;
-                }
-            }
-        };
-    }
-</script>
-@endverbatim
