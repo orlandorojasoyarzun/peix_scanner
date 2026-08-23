@@ -1,0 +1,56 @@
+# Anything that does not need to live inside the production image.
+# Keeping the image lean reduces the build cache size and the attack
+# surface (no test code, no local env files).
+
+# Local environment — never ship a developer .env
+.env
+.env.*
+!.env.example
+
+# Tests, fixtures and debug tooling
+tests/
+.phpunit.cache/
+.phpunit.result.cache
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/app/private/scan-uploads/*
+
+# Build artefacts that will be regenerated on the image itself
+node_modules/
+public/build/
+public/hot
+public/storage
+
+# Editor and OS junk
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# CI and git
+.git/
+.github/
+.gitattributes
+.gitignore
+
+# Composer caches — Nixpacks runs `composer install` inside the image
+# and vendors are excluded from the build context. We only keep them out
+# of the docker COPY layer.
+
+# Documentation that doesn't help at runtime
+README.md
+CHANGELOG.md
+LICENSE
+docs/
+*.md
+
+# Railway-specific overrides — Nixpacks uses these itself, we don't
+# want them as inputs.
+Procfile
+nixpacks.toml
+railway.toml
+railway.json
+.dockerignore

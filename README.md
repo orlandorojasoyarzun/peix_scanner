@@ -187,6 +187,71 @@ For commits don't trust me blindly: review before accepting. If something doesn'
 
 ---
 
+## Deploy on Railway
+
+The app ships with `Procfile`, `nixpacks.toml`, `railway.toml` and `.dockerignore` so a fresh Railway project can boot with zero manual configuration beyond setting secrets.
+
+### Services to provision
+
+| Service | Purpose | Notes |
+|---|---|---|
+| Web (PHP) | Serves HTTP via Laravel Octane + FrankenPHP | `web` process in Procfile |
+| Worker (PHP) | Queue worker | `worker` process in Procfile |
+| Scheduler (PHP) | Runs `schedule:work` (scans:purge hourly + daily deep) | `scheduler` process in Procfile |
+| Postgres 17 | Database | DB_CONNECTION=pgsql |
+| Redis 7 | Cache + queue + session | CACHE_STORE=redis, QUEUE_CONNECTION=redis, SESSION_DRIVER=redis |
+| Volume | Persistent storage for `storage/app/private/` | Mount at `/app/storage` |
+
+### Environment variables to set on Railway
+
+| Variable | Value | Source |
+|---|---|---|
+| `APP_ENV` | `production` | hardcoded in this repo's defaults |
+| `APP_DEBUG` | `false` | hardcoded in this repo's defaults |
+| `APP_KEY` | `base64:…` (32 random bytes) | `php artisan key:generate` locally, paste into Railway |
+| `APP_URL` | `https://<your-domain>` | Railway public domain or custom domain |
+| `DB_CONNECTION` | `pgsql` | matches the Postgres service |
+| `DB_HOST` / `DB_PORT` / `DB_DATABASE` / `DB_USERNAME` / `DB_PASSWORD` | from Railway Postgres reference vars | auto-injected if you use the `DATABASE_URL` reference |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | from Railway Redis reference vars | same — or use `REDIS_URL` |
+| `CACHE_STORE` | `redis` | also sets cache lock driver |
+| `SESSION_DRIVER` | `redis` | also sets session table |
+| `QUEUE_CONNECTION` | `redis` | runs the same code as `worker` process |
+| `SESSION_ENCRYPT` | `true` | default already, but explicit is safer |
+| `SESSION_SECURE_COOKIE` | `true` | auto-true when `APP_ENV=production`, but explicit for clarity |
+| `LOG_CHANNEL` | `stderr` | JSON-formatted; auto-set when `APP_ENV=production` |
+| `OPENROUTER_API_KEY` | `sk-or-v1-…` | rotated; inject via Railway Variables |
+| `OPENROUTER_MODEL` | `nvidia/nemotron-nano-12b-v2-vl:free` | current model |
+| `USDA_API_KEY` | `…` | rotated; inject via Railway Variables |
+| `OCTANE_SERVER` | `frankenphp` | baked into the Procfile but exposed for clarity |
+
+### Build / start
+
+Nixpacks runs:
+
+```
+composer install --no-dev --prefer-dist --optimize-autoloader
+npm ci && npm run build
+php artisan octane:install --server=frankenphp
+```
+
+Then on each deploy start:
+
+```
+php artisan config:cache && php artisan route:cache && php artisan event:cache && php artisan storage:link
+```
+
+The `web` process boots Octane over FrankenPHP on `0.0.0.0:${PORT}`.
+
+### Healthcheck
+
+Laravel exposes `/up` (declared in `bootstrap/app.php`). `railway.toml` tells Railway to hit that route for healthchecks.
+
+### Why Octane/FrankenPHP instead of `php artisan serve`?
+
+`php artisan serve` is the **single-threaded** development server. It cannot serve concurrent requests, so a handful of parallel users at peak (e.g. demo day at the hackathon) would queue up and time out. Octane keeps the PHP runtime resident across requests, supports HTTP/2, and is what every real Laravel-on-Railway deploy uses.
+
+---
+
 ## Further documentation
 
 - `docs/CHANGELOG.md`: work session log
