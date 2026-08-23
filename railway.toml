@@ -1,0 +1,29 @@
+# Railway service configuration.
+#
+# This file is the source of truth for how Railway runs *this* service.
+# It points Nixpacks at the right commands and declares a healthcheck
+# so the orchestrator can detect a wedged dyno and restart it.
+#
+# `healthcheckPath` must be a route that returns 2xx once the app is
+# fully booted (DB reachable, caches warm). Laravel exposes `/up` for
+# exactly this purpose — see bootstrap/app.php's `health: '/up'` line.
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+# releaseCommand runs once per deploy BEFORE the new version takes traffic.
+# If `migrate --force` fails, Railway aborts the deploy and the previous
+# version keeps serving — no half-migrated schema leaks to users. We use
+# --force because Laravel refuses to migrate in production otherwise.
+#
+# This is also why SQLite is fine for local dev (migrate:fresh + tests
+# exercise the same migration files) and Postgres in production: the
+# schema is identical at the application layer.
+releaseCommand = "php artisan migrate --force --no-interaction"
+
+startCommand = "php artisan octane:start --server=frankenphp --host=0.0.0.0 --port=${PORT:-8000}"
+healthcheckPath = "/up"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

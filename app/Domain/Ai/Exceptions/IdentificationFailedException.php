@@ -33,6 +33,12 @@ class IdentificationFailedException extends RuntimeException
 
     public const REASON_PARSE_FAILED = 'parse_failed';
 
+    /**
+     * The circuit breaker has tripped and we are refusing outbound calls
+     * to the upstream provider until the cooldown elapses.
+     */
+    public const REASON_CIRCUIT_OPEN = 'circuit_open';
+
     public const REASON_UNKNOWN = 'unknown';
 
     /**
@@ -71,7 +77,8 @@ class IdentificationFailedException extends RuntimeException
             self::REASON_HTTP_ERROR,
             self::REASON_RATE_LIMIT,
             self::REASON_EMPTY_BODY,
-            self::REASON_PARSE_FAILED => $reason,
+            self::REASON_PARSE_FAILED,
+            self::REASON_CIRCUIT_OPEN => $reason,
             default => self::REASON_UNKNOWN,
         };
     }

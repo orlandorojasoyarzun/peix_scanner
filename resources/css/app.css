@@ -7,6 +7,31 @@
 @source '../**/*.blade.php';
 @source '../**/*.js';
 
+/* Submit-button busy state: force display:none on the spinner span
+ * until JS flips data-busy to "true". The :not([data-busy="true"])
+ * part is what lets JS opt OUT of this rule — once submit fires, JS
+ * sets data-busy="true" and the rule no longer matches, so an inline
+ * style="display: flex" can take over without fighting !important.
+ *
+ * Tailwind's `hidden` utility alone is not enough: `.inline-flex` is
+ * declared AFTER `.hidden` in the compiled CSS, so a span with
+ * `class="inline-flex ... hidden"` would still render at load time.
+ * The attribute selector + !important wins regardless of class order. */
+[id$="-submit-busy"]:not([data-busy="true"]) {
+    display: none !important;
+}
+
+/* Alpine.js x-cloak: hide elements with the attribute until Alpine has
+ * booted and removed it. Without this CSS, the attribute is a no-op and
+ * every x-show/x-if tab panel flashes visible on first paint (the user
+ * sees all tabs stacked, including the ones x-show intends to hide).
+ * This must be `!important` because Alpine removes the attribute inline
+ * after the directive binds, and inline `display: ""` from x-show can
+ * otherwise race with this rule. */
+[x-cloak] {
+    display: none !important;
+}
+
 @theme {
     --font-sans: 'Outfit', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';

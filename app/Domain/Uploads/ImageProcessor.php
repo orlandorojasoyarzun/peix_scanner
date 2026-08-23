@@ -1,0 +1,149 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Uploads;
+
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
+use Intervention\Image\Drivers\Gd\Driver as GdDriver;
+use Intervention\Image\Encoders\JpegEncoder;
+use Intervention\Image\ImageManager;
+use RuntimeException;
+
+/**
+ * Re-encodes user uploads to a clean, EXIF-stripped JPEG.
+ *
+ * Why we re-encode instead of trusting the original file:
+ *
+ *   1. **EXIF / metadata leakage.** A photo straight off a phone contains
+ *      GPS coordinates, device model, timestamps. We strip all of that by
+ *      not copying any metadata to the output.
+ *   2. **Polyglot files.** A PNG / WebP can be crafted to be a valid image
+ *      AND a valid ZIP / HTML / PDF. Decoding into GD/Imagick and re-encoding
+ *      deconstructs any hidden payload.
+ *   3. **Memory bombs.** A 200-byte header can claim dimensions of 50,000 x
+ *      50,000, which would OOM the server the moment we touched pixels.
+ *      We cap the pixel count before any work happens.
+ *   4. **Storage cost.** A 6 MB iPhone photo compresses to ~400 KB at JPEG
+ *      quality 80 with no visible loss for fish identification.
+ *
+ * The output is always `.jpg` regardless of what the user uploaded — that
+ * means the rest of the application only has to handle one image format.
+ */
+final class ImageProcessor
+{
+    /**
+     * Hard cap on pixel count. 12 megapixels is comfortably above any
+     * camera phone's "small" setting and well below the point where
+     * GD/Imagick starts eating gigabytes.
+     */
+    private const MAX_PIXELS = 12_000_000;
+
+    /**
+     * Re-encode quality. 80 is the sweet spot for photos — indistinguishable
+     * from the original at normal viewing sizes, ~10× smaller.
+     */
+    private const JPEG_QUALITY = 80;
+
+    /**
+     * @return array{bytes: string, extension: 'jpg', width: int, height: int}
+     *
+     * @throws InvalidImageException the upload isn't a real image, exceeds
+     *                                the pixel cap, or can't be decoded
+     */
+    public function reencode(UploadedFile $file): array
+    {
+        if (! $file->isValid()) {
+            throw new InvalidImageException('Upload failed before reaching the processor.');
+        }
+
+        $tmpPath = $file->getRealPath();
+
+        if ($tmpPath === false) {
+            throw new InvalidImageException('Could not resolve the temporary upload path.');
+        }
+
+        // Cheap pre-flight check on declared dimensions without decoding
+        // pixels. getimagesize() reads the header only — cheap and safe.
+        $info = @getimagesize($tmpPath);
+
+        if ($info === false) {
+            throw new InvalidImageException('The uploaded file is not a recognised image.');
+        }
+
+        [$width, $height] = $info;
+
+        if ($width <= 0 || $height <= 0) {
+            throw new InvalidImageException('Image dimensions are unreadable.');
+        }
+
+        $pixels = $width * $height;
+
+        if ($pixels > self::MAX_PIXELS) {
+            Log::warning('Upload rejected: pixel count too high', [
+                'declared_width' => $width,
+                'declared_height' => $height,
+                'pixel_count' => $pixels,
+                'limit' => self::MAX_PIXELS,
+            ]);
+
+            throw new InvalidImageException(
+                "La imagen es demasiado grande ({$width}×{$height}). Máximo permitido: ".
+                self::MAX_PIXELS.' píxeles.'
+            );
+        }
+
+        try {
+            $manager = new ImageManager(new GdDriver());
+            $image = $manager->read($tmpPath);
+        } catch (\Throwable $e) {
+            Log::warning('Image decode failed', [
+                'error' => $e->getMessage(),
+                'declared_mime' => $info[2] ?? null,
+            ]);
+
+            throw new InvalidImageException('No pudimos decodificar la imagen. Asegúrate de que sea JPG, PNG o WebP.');
+        }
+
+        $encoded = $image->encode(new JpegEncoder(quality: self::JPEG_QUALITY));
+
+        $bytes = (string) $encoded;
+
+        if ($bytes === '') {
+            throw new InvalidImageException('Image re-encode produced an empty payload.');
+        }
+
+        // After re-encode we know the real dimensions. Trust these, not the
+        // header-declared ones, for downstream decisions (e.g. UI layout).
+        $realWidth = $image->width();
+        $realHeight = $image->height();
+
+        return [
+            'bytes' => $bytes,
+            'extension' => 'jpg',
+            'width' => $realWidth,
+            'height' => $realHeight,
+        ];
+    }
+
+    /**
+     * Write the encoded bytes to the private disk under the given scan ID.
+     * Returns the relative path so callers can stash it in the cache.
+     *
+     * @param  array{bytes: string, extension: 'jpg', width: int, height: int}  $encoded
+     */
+    public function persist(array $encoded, string $scanId, string $disk = 'local'): string
+    {
+        $filename = "{$scanId}.{$encoded['extension']}";
+        $path = "scan-uploads/{$filename}";
+
+        $written = \Illuminate\Support\Facades\Storage::disk($disk)->put($path, $encoded['bytes']);
+
+        if ($written === false) {
+            throw new RuntimeException("Could not write re-encoded image to {$path}.");
+        }
+
+        return $path;
+    }
+}

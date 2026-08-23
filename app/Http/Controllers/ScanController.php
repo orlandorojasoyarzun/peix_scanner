@@ -6,15 +6,19 @@ namespace App\Http\Controllers;
 
 use App\Application\Actions\IdentifySpeciesAction;
 use App\Domain\Ai\Adapters\OpenRouterVisionAdapter;
+use App\Domain\Ai\AllowedSpecies;
 use App\Domain\Ai\Exceptions\IdentificationFailedException;
 use App\Domain\Ai\SpeciesLabelMapper;
 use App\Domain\Ai\SpeciesTranslations;
 use App\Domain\Nutrition\Models\NutritionProfile;
 use App\Domain\Species\Models\Species;
+use App\Domain\Uploads\ImageProcessor;
+use App\Domain\Uploads\InvalidImageException;
 use App\Http\Requests\ScanImageRequest;
 use App\Services\FoodDataCentralService;
 use App\Services\WikipediaService;
 use App\Support\CacheKeys;
+use App\Support\ScanStateStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Cache;
@@ -31,6 +35,8 @@ class ScanController
         private readonly SpeciesLabelMapper $labelMapper,
         private readonly FoodDataCentralService $fdc,
         private readonly OpenRouterVisionAdapter $openRouter,
+        private readonly ImageProcessor $imageProcessor,
+        private readonly ScanStateStore $scanState,
     ) {}
 
     public function home(): View
@@ -48,19 +54,17 @@ class ScanController
         set_time_limit(180);
 
         $file = $request->file('photo');
-        $extension = $request->safeExtension();
         $scanId = (string) Str::uuid();
-        $filename = "{$scanId}.{$extension}";
 
-        Storage::disk('local')->makeDirectory('scan-uploads');
-        $stored = $file->storeAs('scan-uploads', $filename, 'local');
-
-        if ($stored === false) {
-            Log::error('Failed to store scan upload', ['scan_id' => $scanId]);
+        try {
+            $encoded = $this->imageProcessor->reencode($file);
+            $stored = $this->imageProcessor->persist($encoded, $scanId);
+        } catch (InvalidImageException $e) {
+            Log::warning('Rejected upload in store()', ['scan_id' => $scanId, 'error' => $e->getMessage()]);
 
             return redirect()
-                ->route('scan.confirm', $scanId)
-                ->withErrors(['photo' => 'No pudimos guardar la imagen. Inténtalo de nuevo.']);
+                ->route('scan.create')
+                ->withErrors(['photo' => $e->getMessage()]);
         }
 
         $absolutePath = Storage::disk('local')->path($stored);
@@ -76,29 +80,40 @@ class ScanController
         try {
             $result = $action->execute($absolutePath);
         } catch (IdentificationFailedException $e) {
-            Log::warning('Identification failed', ['scan_id' => $scanId, 'error' => $e->getMessage()]);
-            Cache::put(CacheKeys::scanError($scanId), $e->getMessage(), now()->addMinutes(10));
-            Cache::put(CacheKeys::scanImage($scanId), $stored, now()->addMinutes(10));
-            Cache::put(CacheKeys::scanMode($scanId), 'fish', now()->addMinutes(10));
+            // Log the safe message PLUS the upstream context (e.g. OpenRouter's
+            // own 401/403 reason) so a freshly-revoked key shows up clearly in
+            // logs without leaking that detail to the user-facing error.
+            Log::warning('Identification failed', [
+                'scan_id' => $scanId,
+                'reason' => $e->getReason(),
+                'upstream' => $e->getContext(),
+                'message' => $e->getMessage(),
+            ]);
+            $this->scanState->put($scanId, [
+                'mode' => 'fish',
+                'image' => $stored,
+                'error' => $e->getMessage(),
+            ]);
 
             return redirect()->route('scan.confirm', $scanId);
         }
 
-        Cache::put(CacheKeys::scanResult($scanId), [
-            'scientific_name' => $result->scientificName,
-            'common_name' => $result->commonName,
-            'common_name_local' => $this->cleanSpanishName(
-                $result->commonNameLocal !== ''
-                    ? $result->commonNameLocal
-                    : (SpeciesTranslations::toSpanish($result->commonName) ?? ucfirst($result->commonName))
-            ),
-            'regional_names' => $result->regionalNames,
-            'confidence' => $result->confidence,
-            'high_confidence' => $result->isHighConfidence(),
-        ], now()->addMinutes(10));
-
-        Cache::put(CacheKeys::scanImage($scanId), $stored, now()->addMinutes(10));
-        Cache::put(CacheKeys::scanMode($scanId), 'fish', now()->addMinutes(10));
+        $this->scanState->put($scanId, [
+            'mode' => 'fish',
+            'image' => $stored,
+            'result' => [
+                'scientific_name' => $result->scientificName,
+                'common_name' => $result->commonName,
+                'common_name_local' => $this->cleanSpanishName(
+                    $result->commonNameLocal !== ''
+                        ? $result->commonNameLocal
+                        : (SpeciesTranslations::toSpanish($result->commonName) ?? ucfirst($result->commonName))
+                ),
+                'regional_names' => $result->regionalNames,
+                'confidence' => $result->confidence,
+                'high_confidence' => $result->isHighConfidence(),
+            ],
+        ]);
 
         return redirect()->route('scan.confirm', $scanId);
     }
@@ -108,19 +123,17 @@ class ScanController
         set_time_limit(180);
 
         $file = $request->file('photo');
-        $extension = $request->safeExtension();
         $scanId = (string) Str::uuid();
-        $filename = "{$scanId}.{$extension}";
 
-        Storage::disk('local')->makeDirectory('scan-uploads');
-        $stored = $file->storeAs('scan-uploads', $filename, 'local');
-
-        if ($stored === false) {
-            Log::error('Failed to store label upload', ['scan_id' => $scanId]);
+        try {
+            $encoded = $this->imageProcessor->reencode($file);
+            $stored = $this->imageProcessor->persist($encoded, $scanId);
+        } catch (InvalidImageException $e) {
+            Log::warning('Rejected upload in storeLabel()', ['scan_id' => $scanId, 'error' => $e->getMessage()]);
 
             return redirect()
-                ->route('scan.confirm', $scanId)
-                ->withErrors(['photo' => 'No pudimos guardar la imagen. Inténtalo de nuevo.']);
+                ->route('scan.create')
+                ->withErrors(['photo' => $e->getMessage()]);
         }
 
         $absolutePath = Storage::disk('local')->path($stored);
@@ -136,18 +149,27 @@ class ScanController
         try {
             $labelText = $adapter->identifyFromLabel($absolutePath);
         } catch (IdentificationFailedException $e) {
-            Log::warning('Label identification failed', ['scan_id' => $scanId, 'error' => $e->getMessage()]);
-            Cache::put(CacheKeys::scanError($scanId), $e->getMessage(), now()->addMinutes(10));
-            Cache::put(CacheKeys::scanImage($scanId), $stored, now()->addMinutes(10));
-            Cache::put(CacheKeys::scanMode($scanId), 'label', now()->addMinutes(10));
+            Log::warning('Label identification failed', [
+                'scan_id' => $scanId,
+                'reason' => $e->getReason(),
+                'upstream' => $e->getContext(),
+                'message' => $e->getMessage(),
+            ]);
+            $this->scanState->put($scanId, [
+                'mode' => 'label',
+                'image' => $stored,
+                'error' => $e->getMessage(),
+            ]);
 
             return redirect()->route('scan.confirm', $scanId);
         }
 
         if ($labelText === null) {
-            Cache::put(CacheKeys::scanError($scanId), 'No pudimos leer ninguna especie en la etiqueta.', now()->addMinutes(10));
-            Cache::put(CacheKeys::scanImage($scanId), $stored, now()->addMinutes(10));
-            Cache::put(CacheKeys::scanMode($scanId), 'label', now()->addMinutes(10));
+            $this->scanState->put($scanId, [
+                'mode' => 'label',
+                'image' => $stored,
+                'error' => 'No pudimos leer ninguna especie en la etiqueta.',
+            ]);
 
             return redirect()->route('scan.confirm', $scanId);
         }
@@ -155,47 +177,72 @@ class ScanController
         $scientificName = $this->labelMapper->map($labelText);
 
         if ($scientificName === null) {
-            Cache::put(CacheKeys::scanError($scanId), "No reconocemos la especie: {$labelText}", now()->addMinutes(10));
-            Cache::put(CacheKeys::scanImage($scanId), $stored, now()->addMinutes(10));
-            Cache::put(CacheKeys::scanMode($scanId), 'label', now()->addMinutes(10));
+            $this->scanState->put($scanId, [
+                'mode' => 'label',
+                'image' => $stored,
+                'error' => "No reconocemos la especie: {$labelText}",
+            ]);
+
+            return redirect()->route('scan.confirm', $scanId);
+        }
+
+        // Defence in depth: even though SpeciesLabelMapper is a closed
+        // table, the label text came from the model. Reject anything that
+        // isn't on the species allowlist so we never cache a name that's
+        // not recognised by the rest of the system.
+        if (! AllowedSpecies::isAllowed($scientificName)) {
+            Log::warning('Label scan mapped to off-list species', [
+                'scan_id' => $scanId,
+                'label_text' => $cleanLabelText ?? $labelText,
+                'mapped_scientific' => $scientificName,
+            ]);
+            $this->scanState->put($scanId, [
+                'mode' => 'label',
+                'image' => $stored,
+                'error' => "No reconocemos la especie: {$labelText}",
+            ]);
 
             return redirect()->route('scan.confirm', $scanId);
         }
 
         $cleanLabelText = trim(preg_replace('/\s*CONFIDENCE:.*$/iu', '', $labelText) ?? '');
-        $localName = SpeciesTranslations::toSpanish($cleanLabelText) ?? ucfirst($cleanLabelText);
+        $canonicalLocal = AllowedSpecies::commonEs($scientificName);
+        $localName = $canonicalLocal ?? (SpeciesTranslations::toSpanish($cleanLabelText) ?? ucfirst($cleanLabelText));
 
-        Cache::put(CacheKeys::scanResult($scanId), [
-            'scientific_name' => $scientificName,
-            'common_name' => $cleanLabelText,
-            'common_name_local' => $localName,
-            'regional_names' => [],
-            'confidence' => 1.0,
-            'high_confidence' => true,
-            'source' => 'label',
-            'label_text' => $cleanLabelText,
-        ], now()->addMinutes(10));
-
-        Cache::put(CacheKeys::scanImage($scanId), $stored, now()->addMinutes(10));
-        Cache::put(CacheKeys::scanMode($scanId), 'label', now()->addMinutes(10));
+        $this->scanState->put($scanId, [
+            'mode' => 'label',
+            'image' => $stored,
+            'result' => [
+                'scientific_name' => $scientificName,
+                'common_name' => $cleanLabelText,
+                'common_name_local' => $localName,
+                'regional_names' => [],
+                'confidence' => 1.0,
+                'high_confidence' => true,
+                'source' => 'label',
+                'label_text' => $cleanLabelText,
+            ],
+        ]);
 
         return redirect()->route('scan.confirm', $scanId);
     }
 
     public function confirm(string $scan): View
     {
-        $result = Cache::get(CacheKeys::scanResult($scan));
-        $storedPath = Cache::get(CacheKeys::scanImage($scan));
-        $error = Cache::get(CacheKeys::scanError($scan));
-        $mode = Cache::get(CacheKeys::scanMode($scan), 'fish');
+        $state = $this->scanState->get($scan) ?? [];
+        $result = $state['result'] ?? null;
+        $storedPath = $state['image'] ?? null;
+        $error = $state['error'] ?? null;
+        $mode = $state['mode'] ?? 'fish';
         $imageUrl = $storedPath ? route('scan.image', $scan) : null;
-        $referenceImageUrl = null;
+        $referenceImageUrl = $state['reference_image'] ?? null;
 
-        if ($result !== null && isset($result['scientific_name'])) {
+        if ($referenceImageUrl === null && $result !== null && isset($result['scientific_name'])) {
             $referenceImageUrl = $this->wikipedia->getSpeciesImage($result['scientific_name']);
 
             if ($referenceImageUrl !== null) {
-                Cache::put(CacheKeys::scanReferenceImage($scan), $referenceImageUrl, now()->addMinutes(30));
+                $state['reference_image'] = $referenceImageUrl;
+                $this->scanState->put($scan, $state);
             }
         }
 
@@ -211,14 +258,15 @@ class ScanController
 
     public function confirmStore(string $scan)
     {
-        $result = Cache::get(CacheKeys::scanResult($scan));
+        $state = $this->scanState->get($scan);
+        $result = $state['result'] ?? null;
 
         if (! $result) {
             return redirect()->route('home');
         }
 
         $speciesParam = Str::slug($result['common_name']).'__'.Str::slug($result['scientific_name']);
-        $referenceImageUrl = Cache::get(CacheKeys::scanReferenceImage($scan))
+        $referenceImageUrl = $state['reference_image']
             ?? $this->wikipedia->getSpeciesImage($result['scientific_name']);
 
         Cache::put(CacheKeys::speciesResult($speciesParam), [
@@ -226,7 +274,7 @@ class ScanController
             'common_name' => $result['common_name'],
             'common_name_local' => $this->cleanSpanishName($result['common_name_local'] ?? ''),
             'regional_names' => $result['regional_names'] ?? [],
-            'image_path' => Cache::get(CacheKeys::scanImage($scan)),
+            'image_path' => $state['image'] ?? null,
             'reference_image_url' => $referenceImageUrl,
         ], now()->addMinutes(30));
 
@@ -237,8 +285,9 @@ class ScanController
     {
         set_time_limit(180);
 
-        $storedPath = Cache::get(CacheKeys::scanImage($scan));
-        $mode = Cache::get(CacheKeys::scanMode($scan), 'fish');
+        $state = $this->scanState->get($scan);
+        $storedPath = $state['image'] ?? null;
+        $mode = $state['mode'] ?? 'fish';
 
         if (! $storedPath) {
             return redirect()->route('home');
@@ -267,12 +316,16 @@ class ScanController
             $result = $action->execute($absolutePath);
         } catch (IdentificationFailedException $e) {
             Log::warning('Rescan fish identification failed', ['scan_id' => $scan, 'error' => $e->getMessage()]);
-            Cache::put(CacheKeys::scanError($scan), $e->getMessage(), now()->addMinutes(10));
+            $state = $this->scanState->get($scan) ?? [];
+            $state['error'] = $e->getMessage();
+            $state['result'] = null;
+            $this->scanState->put($scan, $state);
 
             return redirect()->route('scan.confirm', $scan);
         }
 
-        Cache::put(CacheKeys::scanResult($scan), [
+        $state = $this->scanState->get($scan) ?? [];
+        $state['result'] = [
             'scientific_name' => $result->scientificName,
             'common_name' => $result->commonName,
             'common_name_local' => $this->cleanSpanishName(
@@ -283,9 +336,9 @@ class ScanController
             'regional_names' => $result->regionalNames,
             'confidence' => $result->confidence,
             'high_confidence' => $result->isHighConfidence(),
-        ], now()->addMinutes(10));
-
-        Cache::forget(CacheKeys::scanError($scan));
+        ];
+        $state['error'] = null;
+        $this->scanState->put($scan, $state);
 
         return redirect()->route('scan.confirm', $scan);
     }
@@ -296,13 +349,19 @@ class ScanController
             $labelText = $adapter->identifyFromLabel($absolutePath);
         } catch (IdentificationFailedException $e) {
             Log::warning('Rescan label identification failed', ['scan_id' => $scan, 'error' => $e->getMessage()]);
-            Cache::put(CacheKeys::scanError($scan), $e->getMessage(), now()->addMinutes(10));
+            $state = $this->scanState->get($scan) ?? [];
+            $state['error'] = $e->getMessage();
+            $state['result'] = null;
+            $this->scanState->put($scan, $state);
 
             return redirect()->route('scan.confirm', $scan);
         }
 
         if ($labelText === null) {
-            Cache::put(CacheKeys::scanError($scan), 'No pudimos leer ninguna especie en la etiqueta.', now()->addMinutes(10));
+            $state = $this->scanState->get($scan) ?? [];
+            $state['error'] = 'No pudimos leer ninguna especie en la etiqueta.';
+            $state['result'] = null;
+            $this->scanState->put($scan, $state);
 
             return redirect()->route('scan.confirm', $scan);
         }
@@ -310,23 +369,27 @@ class ScanController
         $scientificName = $this->labelMapper->map($labelText);
 
         if ($scientificName === null) {
-            Cache::put(CacheKeys::scanError($scan), "No reconocemos la especie: {$labelText}", now()->addMinutes(10));
+            $state = $this->scanState->get($scan) ?? [];
+            $state['error'] = "No reconocemos la especie: {$labelText}";
+            $state['result'] = null;
+            $this->scanState->put($scan, $state);
 
             return redirect()->route('scan.confirm', $scan);
         }
 
         $localName = SpeciesTranslations::toSpanish($labelText) ?? ucfirst($labelText);
 
-        Cache::put(CacheKeys::scanResult($scan), [
+        $state = $this->scanState->get($scan) ?? [];
+        $state['result'] = [
             'scientific_name' => $scientificName,
             'common_name' => $labelText,
             'common_name_local' => $localName,
             'regional_names' => [],
             'confidence' => 1.0,
             'high_confidence' => true,
-        ], now()->addMinutes(10));
-
-        Cache::forget(CacheKeys::scanError($scan));
+        ];
+        $state['error'] = null;
+        $this->scanState->put($scan, $state);
 
         return redirect()->route('scan.confirm', $scan);
     }

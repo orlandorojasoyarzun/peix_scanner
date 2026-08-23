@@ -8,6 +8,7 @@ use App\Domain\Ai\Contracts\SpeciesIdentifier;
 use App\Domain\Ai\DTOs\IdentificationResult;
 use App\Domain\Ai\Exceptions\IdentificationFailedException;
 use App\Domain\Ai\ParsesVisionResponse;
+use App\Domain\Ai\Support\OpenRouterCircuitBreaker;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -138,6 +139,7 @@ PROMPT;
     public function __construct(
         private readonly string $apiKey,
         private readonly string $model,
+        private readonly OpenRouterCircuitBreaker $breaker,
     ) {}
 
     public function identify(string $imagePath): IdentificationResult
@@ -148,6 +150,8 @@ PROMPT;
                 IdentificationFailedException::REASON_IMAGE_NOT_FOUND,
             );
         }
+
+        $this->guardCircuit();
 
         $imagePath = $this->resizeIfNeeded($imagePath);
         $imageBase64 = base64_encode((string) file_get_contents($imagePath));
@@ -178,6 +182,7 @@ PROMPT;
                 'X-Title' => 'Peix Scanner',
             ])->post(self::ENDPOINT, $payload);
         } catch (\Throwable $e) {
+            $this->breaker->recordFailure();
             Log::warning('OpenRouter HTTP transport error', [
                 'error_preview' => mb_substr($e->getMessage(), 0, 200),
             ]);
@@ -190,6 +195,9 @@ PROMPT;
         }
 
         if ($response->status() === 429) {
+            // Rate-limit responses are the upstream telling us to back off —
+            // count toward the breaker so we stop piling on.
+            $this->breaker->recordFailure();
             throw IdentificationFailedException::fromProvider(
                 'openrouter',
                 IdentificationFailedException::REASON_RATE_LIMIT,
@@ -198,21 +206,43 @@ PROMPT;
         }
 
         if (! $response->successful()) {
+            $this->breaker->recordFailure();
+            $body = $response->body();
+            $status = $response->status();
+
+            // 401/403 mean the API key was rejected — surface the upstream
+            // message so a freshly-rotated key shows clearly in logs instead
+            // of being buried behind a generic "http_error".
+            if ($status === 401 || $status === 403) {
+                $upstream = (string) $response->json('error.message', $body);
+                Log::error('OpenRouter rejected the API key', [
+                    'status' => $status,
+                    'upstream' => mb_substr($upstream, 0, 300),
+                ]);
+
+                throw IdentificationFailedException::fromProvider(
+                    'openrouter',
+                    IdentificationFailedException::REASON_HTTP_ERROR,
+                    ['status' => $status, 'upstream' => mb_substr($upstream, 0, 300)],
+                );
+            }
+
             Log::warning('OpenRouter HTTP error response', [
-                'status' => $response->status(),
-                'body_preview' => mb_substr($response->body(), 0, 500),
+                'status' => $status,
+                'body_preview' => mb_substr($body, 0, 500),
             ]);
 
             throw IdentificationFailedException::fromProvider(
                 'openrouter',
                 IdentificationFailedException::REASON_HTTP_ERROR,
-                ['status' => $response->status()],
+                ['status' => $status],
             );
         }
 
         $body = (string) $response->json('choices.0.message.content', '');
 
         if ($body === '') {
+            $this->breaker->recordFailure();
             throw IdentificationFailedException::fromProvider(
                 'openrouter',
                 IdentificationFailedException::REASON_EMPTY_BODY,
@@ -222,6 +252,7 @@ PROMPT;
         $parsed = $this->parseResponse($body);
 
         if ($parsed === null) {
+            $this->breaker->recordFailure();
             Log::warning('OpenRouter response parse failed', [
                 'body_preview' => mb_substr($body, 0, 500),
             ]);
@@ -231,6 +262,8 @@ PROMPT;
                 IdentificationFailedException::REASON_PARSE_FAILED,
             );
         }
+
+        $this->breaker->recordSuccess();
 
         return $parsed;
     }
@@ -243,6 +276,8 @@ PROMPT;
                 IdentificationFailedException::REASON_IMAGE_NOT_FOUND,
             );
         }
+
+        $this->guardCircuit();
 
         $imagePath = $this->resizeIfNeeded($imagePath);
         $imageBase64 = base64_encode((string) file_get_contents($imagePath));
@@ -273,6 +308,7 @@ PROMPT;
                 'X-Title' => 'Peix Scanner',
             ])->post(self::ENDPOINT, $payload);
         } catch (\Throwable $e) {
+            $this->breaker->recordFailure();
             Log::warning('OpenRouter HTTP transport error', [
                 'error_preview' => mb_substr($e->getMessage(), 0, 200),
             ]);
@@ -285,6 +321,7 @@ PROMPT;
         }
 
         if ($response->status() === 429) {
+            $this->breaker->recordFailure();
             throw IdentificationFailedException::fromProvider(
                 'openrouter',
                 IdentificationFailedException::REASON_RATE_LIMIT,
@@ -293,21 +330,43 @@ PROMPT;
         }
 
         if (! $response->successful()) {
+            $this->breaker->recordFailure();
+            $body = $response->body();
+            $status = $response->status();
+
+            // 401/403 mean the API key was rejected — surface the upstream
+            // message so a freshly-rotated key shows clearly in logs instead
+            // of being buried behind a generic "http_error".
+            if ($status === 401 || $status === 403) {
+                $upstream = (string) $response->json('error.message', $body);
+                Log::error('OpenRouter rejected the API key', [
+                    'status' => $status,
+                    'upstream' => mb_substr($upstream, 0, 300),
+                ]);
+
+                throw IdentificationFailedException::fromProvider(
+                    'openrouter',
+                    IdentificationFailedException::REASON_HTTP_ERROR,
+                    ['status' => $status, 'upstream' => mb_substr($upstream, 0, 300)],
+                );
+            }
+
             Log::warning('OpenRouter HTTP error response', [
-                'status' => $response->status(),
-                'body_preview' => mb_substr($response->body(), 0, 500),
+                'status' => $status,
+                'body_preview' => mb_substr($body, 0, 500),
             ]);
 
             throw IdentificationFailedException::fromProvider(
                 'openrouter',
                 IdentificationFailedException::REASON_HTTP_ERROR,
-                ['status' => $response->status()],
+                ['status' => $status],
             );
         }
 
         $body = (string) $response->json('choices.0.message.content', '');
 
         if ($body === '') {
+            $this->breaker->recordFailure();
             \Illuminate\Support\Facades\Log::warning('OpenRouter label scan: empty body', [
                 'status' => $response->status(),
                 'body_preview' => mb_substr($response->body(), 0, 500),
@@ -321,9 +380,14 @@ PROMPT;
         $parsed = $this->parseLabelResponse($body);
 
         if ($parsed === null) {
+            // A parse failure here is a model-shape problem, not an
+            // upstream outage. Don't trip the breaker — other request
+            // types might still succeed.
             \Illuminate\Support\Facades\Log::warning('OpenRouter label scan: parse failed', [
                 'body_preview' => mb_substr($body, 0, 500),
             ]);
+        } else {
+            $this->breaker->recordSuccess();
         }
 
         return $parsed;
@@ -413,6 +477,11 @@ PROMPT;
      */
     public function generateText(string $prompt, int $maxTokens = 400): ?string
     {
+        // generateText is non-fatal (returns null on failure), so we skip
+        // the hard guardCircuit() check — it would have already tripped
+        // via identify()/identifyFromLabel() upstream and the user already
+        // saw a friendly error. Calling it anyway would burn quota on a
+        // request that is allowed to fail silently.
         try {
             $response = Http::timeout(20)->post(self::ENDPOINT, [
                 'model' => $this->model,
@@ -430,6 +499,7 @@ PROMPT;
                 'temperature' => 0.5,
             ]);
         } catch (\Throwable $e) {
+            $this->breaker->recordFailure();
             Log::warning('OpenRouter generateText failed', [
                 'error_preview' => mb_substr($e->getMessage(), 0, 200),
             ]);
@@ -438,6 +508,7 @@ PROMPT;
         }
 
         if (! $response->successful()) {
+            $this->breaker->recordFailure();
             Log::warning('OpenRouter generateText unsuccessful', ['status' => $response->status()]);
 
             return null;
@@ -445,7 +516,13 @@ PROMPT;
 
         $body = (string) $response->json('choices.0.message.content', '');
 
-        return trim($body) !== '' ? trim($body) : null;
+        if (trim($body) === '') {
+            return null;
+        }
+
+        $this->breaker->recordSuccess();
+
+        return trim($body);
     }
 
     private function detectMimeType(string $path): string
@@ -473,5 +550,23 @@ PROMPT;
         } finally {
             restore_error_handler();
         }
+    }
+
+    /**
+     * Short-circuit the call when the circuit breaker is OPEN. The
+     * underlying cause (HTTP 5xx storm, repeated 429, persistent
+     * transport failure) is already recorded and visible in the logs;
+     * bouncing the request back through here would just cost more quota.
+     */
+    private function guardCircuit(): void
+    {
+        if ($this->breaker->isClosed()) {
+            return;
+        }
+
+        throw IdentificationFailedException::fromProvider(
+            'openrouter',
+            IdentificationFailedException::REASON_CIRCUIT_OPEN,
+        );
     }
 }

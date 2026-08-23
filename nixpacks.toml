@@ -1,0 +1,31 @@
+# Nixpacks build configuration for Railway.
+#
+# Nixpacks auto-detects Laravel via composer.json and provides a sensible
+# default build (PHP 8.x, Composer, Node, Vite), but it doesn't know
+# about Octane/FrankenPHP. We override install phases to pull the
+# FrankenPHP runtime the Procfile's `web` process needs.
+#
+# If you change the PHP version here, also bump `composer.json`'s
+# `"php": "^8.2"` requirement.
+
+[phases.setup]
+# Nix base image with PHP 8.4, Composer and Node 22. Node is required by
+# Vite to build the Tailwind/Alpine frontend bundle.
+nixPkgs = ["php84", "php84Packages.composer", "nodejs_22"]
+
+[phases.install]
+# We split composer install and npm build so each one runs in its own
+# cached layer — touching package.json shouldn't bust the composer cache.
+cmds = [
+    "composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader",
+    "npm ci --no-audit --no-fund",
+    "npm run build",
+    "php artisan octane:install --server=frankenphp --no-interaction",
+]
+
+[start]
+# `start` runs on every deploy *and* every dyno restart. The optimisation
+# commands are idempotent — `config:cache` simply rewrites the file if it
+# already exists, and `route:cache` does the same. We don't run `view:cache`
+# because Blade views are pre-compiled by Octane's runtime cache.
+cmd = "php artisan config:cache && php artisan route:cache && php artisan event:cache && php artisan storage:link"

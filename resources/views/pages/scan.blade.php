@@ -1,5 +1,5 @@
 <x-layouts.app title="Escanear">
-    <div class="flex flex-col gap-6" x-data="{ submitting: false }">
+    <div class="flex flex-col gap-6">
         @if ($errors->any())
             <div class="rounded-2xl border-l-4 border-flame bg-flame/10 p-3">
                 <div class="text-xs font-semibold text-ink">Revisa la imagen</div>
@@ -15,7 +15,8 @@
             method="POST"
             enctype="multipart/form-data"
             class="flex flex-col gap-4"
-            @submit="if (! submitting) { submitting = true; }"
+            data-scan-route="{{ route('scan.store') }}"
+            data-scan-label-route="{{ route('scan.storeLabel') }}"
         >
             @csrf
             <input type="hidden" name="scan_type" id="scan_type" value="fish">
@@ -54,11 +55,11 @@
 
             <button
                 type="submit"
-                :disabled="submitting"
-                class="rounded-2xl bg-emerald-600 text-white px-6 py-3 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                id="scan-submit"
+                class="rounded-2xl bg-emerald-600 text-white px-6 py-3 text-sm font-semibold"
             >
-                <span x-show="! submitting" x-cloak>Escanear</span>
-                <span x-show="submitting" x-cloak class="flex items-center justify-center gap-2">
+                <span id="scan-submit-label">Escanear</span>
+                <span id="scan-submit-busy" class="flex items-center justify-center gap-2">
                     <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -68,55 +69,11 @@
             </button>
 
             <div
-                x-show="submitting"
-                x-cloak
-                x-transition.opacity
-                class="text-center text-xs text-slate-500"
+                id="scan-hint"
+                class="hidden text-center text-xs text-slate-500"
             >
                 La IA está mirando tu foto. Esto puede tardar entre 5 y 30 segundos.
             </div>
         </form>
     </div>
-
-    <script>
-        const boxFish = document.getElementById('box-fish');
-        const boxLabel = document.getElementById('box-label');
-        const fileInput = document.getElementById('photo');
-        const scanType = document.getElementById('scan_type');
-        const form = document.getElementById('scan-form');
-
-        boxFish.addEventListener('click', () => {
-            scanType.value = 'fish';
-            form.action = '{{ route('scan.store') }}';
-            boxFish.classList.add('border-emerald-500', 'bg-emerald-50/30');
-            boxLabel.classList.remove('border-emerald-500', 'bg-emerald-50/30');
-            fileInput.click();
-        });
-
-        boxLabel.addEventListener('click', () => {
-            scanType.value = 'label';
-            form.action = '{{ route('scan.storeLabel') }}';
-            boxLabel.classList.add('border-emerald-500', 'bg-emerald-50/30');
-            boxFish.classList.remove('border-emerald-500', 'bg-emerald-50/30');
-            fileInput.click();
-        });
-
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files && fileInput.files[0]) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const box = scanType.value === 'fish' ? boxFish : boxLabel;
-                    const existing = box.querySelector('.preview-img');
-                    if (existing) existing.remove();
-                    const icons = box.querySelector('.box-icons');
-                    if (icons) icons.classList.add('hidden');
-                    const img = document.createElement('img');
-                    img.src = e.target.result;
-                    img.className = 'preview-img rounded-xl max-h-64 object-contain mt-2';
-                    box.appendChild(img);
-                };
-                reader.readAsDataURL(fileInput.files[0]);
-            }
-        });
-    </script>
 </x-layouts.app>

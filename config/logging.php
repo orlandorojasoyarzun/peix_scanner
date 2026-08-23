@@ -18,7 +18,18 @@ return [
     |
     */
 
-    'default' => env('LOG_CHANNEL', 'stack'),
+    /*
+     * Default log channel.
+     *
+     * In production we route everything through the `stderr` channel with a
+     * JSON formatter so Railway's log drain picks it up as structured data
+     * (one record per line, machine-parseable). Local development stays on
+     * the `stack` channel that writes to storage/logs/laravel.log for easy
+     * tailing.
+     */
+    'default' => env('APP_ENV') === 'production'
+        ? env('LOG_CHANNEL', 'stderr')
+        : env('LOG_CHANNEL', 'stack'),
 
     /*
     |--------------------------------------------------------------------------
@@ -96,12 +107,20 @@ return [
 
         'stderr' => [
             'driver' => 'monolog',
-            'level' => env('LOG_LEVEL', 'debug'),
+            // Production stays at info (warning+ on free tier is noisy). Local
+            // dev keeps debug so the full trace is visible in the terminal.
+            'level' => env('APP_ENV') === 'production'
+                ? env('LOG_LEVEL', 'info')
+                : env('LOG_LEVEL', 'debug'),
             'handler' => StreamHandler::class,
             'handler_with' => [
                 'stream' => 'php://stderr',
             ],
-            'formatter' => env('LOG_STDERR_FORMATTER'),
+            // Railway's log drain prefers one JSON object per line so it can
+            // parse level/message/timestamp without regex gymnastics. Override
+            // with LOG_STDERR_FORMATTER=Monolog\Formatter\LineFormatter if you
+            // want human-readable output instead.
+            'formatter' => env('LOG_STDERR_FORMATTER', \Monolog\Formatter\JsonFormatter::class),
             'processors' => [PsrLogMessageProcessor::class],
         ],
 
