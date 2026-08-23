@@ -50,26 +50,96 @@ it('the /up route exists and returns 200 for the healthcheck', function () {
     $response->assertOk();
 });
 
-it('bootstrap/app.php declares the production domain as trusted host', function () {
+it('bootstrap/app.php declares Railway-owned hostnames as trusted', function () {
     $contents = file_get_contents(base_path('bootstrap/app.php'));
 
-    // The trustHosts() call must list the Railway domain so an attacker
-    // who injects a Host header cannot redirect generated URLs.
+    // The trustHosts() call must list every hostname Railway might send,
+    // otherwise an attacker (or Railway's own healthcheck / public
+    // domain) gets a Symfony `SuspiciousOperationException` and Laravel
+    // returns HTTP 400.
     expect($contents)->toContain('trustHosts(')
-        ->and($contents)->toContain('peix-scanner.up.railway.app');
+        // Loopback / local dev (escaped form because the pattern is a
+        // regex: ^127\.0\.0\.1$, not a literal IP).
+        ->and($contents)->toContain('^localhost$')
+        ->and($contents)->toContain('^127\.0\.0\.1$')
+        // Public Railway domains — matched by regex so we don't have to
+        // hardcode the exact subdomain Railway picked for this project.
+        ->and($contents)->toContain('up\.railway\.app')
+        // Internal Railway service hostnames
+        ->and($contents)->toContain('railway\.internal')
+        // Deploy healthcheck probe (see
+        // https://docs.railway.com/deployments/healthchecks#healthcheck-hostname)
+        ->and($contents)->toContain('healthcheck.railway.app');
 });
 
-it('bootstrap/app.php trusts healthcheck.railway.app so Railway healthchecks pass', function () {
-    $contents = file_get_contents(base_path('bootstrap/app.php'));
+it('trustHosts accepts Railway-generated public domains and rejects hostile lookalikes', function () {
+    // Drive the actual middleware so we exercise the regex Laravel hands
+    // to Symfony, not just the raw pattern string in the source file.
+    //
+    // Every pattern is anchored ^…$ because Symfony's Request::setTrustedHosts
+    // does a preg_match without anchors — so an unanchored "localhost"
+    // pattern would also match "localhost.attacker.com" (a Host header
+    // injection vector).
+    $trusted = [
+        '^localhost$',
+        '^127\.0\.0\.1$',
+        '^healthcheck\.railway\.app$',
+        '^(.+\.)?up\.railway\.app$',
+        '^(.+\.)?railway\.internal$',
+    ];
 
-    // Railway sends healthchecks with `Host: healthcheck.railway.app` (see
-    // https://docs.railway.com/deployments/healthchecks#healthcheck-hostname).
-    // If trustHosts() doesn't include it, Symfony throws
-    // `SuspiciousOperationException("Untrusted Host ...")` for /up, Laravel
-    // returns HTTP 400, and Railway marks the deploy "service unavailable"
-    // even though the app itself is healthy.
-    expect($contents)->toContain('trustHosts(')
-        ->and($contents)->toContain('healthcheck.railway.app');
+    // Compile exactly the way Symfony does it (Request::setTrustedHosts).
+    $compiled = array_map(
+        static fn (string $p) => sprintf('{%s}i', $p),
+        $trusted,
+    );
+
+    $accept = [
+        'peixscanner-production.up.railway.app',
+        'healthcheck.railway.app',
+        'peix_scanner.railway.internal',
+        'localhost',
+        '127.0.0.1',
+    ];
+    foreach ($accept as $host) {
+        $matched = false;
+        foreach ($compiled as $pattern) {
+            if (preg_match($pattern, $host)) {
+                $matched = true;
+                break;
+            }
+        }
+        expect($matched)->toBeTrue("expected {$host} to be accepted");
+    }
+
+    // Host header injection attempts: the trailing `$` anchor in the
+    // wildcard must prevent subdomain chaining like `evil.up.railway.app.attacker.com`,
+    // and the exact-match anchors must reject `localhost.attacker.com`
+    // / `127.0.0.1.attacker.com` / `healthcheck.railway.app.evil.com`.
+    //
+    // Note: we accept any `*.up.railway.app` (including a hypothetical
+    // `evil.up.railway.app`) because Railway owns that DNS zone — no one
+    // else can register a hostname under it, so an attacker cannot forge
+    // a "hostile" entry that still ends in `.up.railway.app`.
+    $reject = [
+        'attacker.example.com',
+        'up.railway.app.attacker.com',
+        'railway.app.attacker.com',
+        'railway.internal.attacker.com',
+        'localhost.attacker.com',
+        '127.0.0.1.attacker.com',
+        'healthcheck.railway.app.evil.com',
+    ];
+    foreach ($reject as $host) {
+        $matched = false;
+        foreach ($compiled as $pattern) {
+            if (preg_match($pattern, $host)) {
+                $matched = true;
+                break;
+            }
+        }
+        expect($matched)->toBeFalse("expected {$host} to be rejected");
+    }
 });
 
 it('bootstrap/app.php trusts the X-Forwarded-Proto header from Railway', function () {

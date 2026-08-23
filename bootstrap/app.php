@@ -43,6 +43,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // an attacker who can force a Host header injection would get
         // generated absolute URLs pointing at their domain.
         //
+        // Railway-owned hostnames (`.up.railway.app`, `.railway.internal`,
+        // and the `healthcheck.railway.app` probe) are matched via regex
+        // patterns because Railway generates the public domain per-service
+        // (e.g. `peixscanner-production.up.railway.app`) and we don't want
+        // to redeploy every time the prefix changes. Railway owns these
+        // TLDs, so an attacker can't register a hostile name under them.
+        //
         // `healthcheck.railway.app` is mandatory: Railway's deploy
         // healthcheck sends GET /up with that exact Host header (see
         // https://docs.railway.com/deployments/healthchecks#healthcheck-hostname).
@@ -53,10 +60,18 @@ return Application::configure(basePath: dirname(__DIR__))
         // healthy (confirmed: FrankenPHP booted, migrations ran, /up route
         // never reached the controller).
         $middleware->trustHosts(at: [
-            'localhost',
-            '127.0.0.1',
-            'peix-scanner.up.railway.app',
-            'healthcheck.railway.app',
+            // Every pattern is anchored ^…$ because Symfony does a
+            // substring match (preg_match without anchors). Without
+            // anchors, "localhost" would also accept "localhost.attacker.com"
+            // and Laravel would generate URLs pointing at the attacker —
+            // a classic Host header injection vector.
+            '^localhost$',
+            '^127\.0\.0\.1$',
+            '^healthcheck\.railway\.app$',
+            // Public Railway domains: <anything>.up.railway.app
+            '^(.+\.)?up\.railway\.app$',
+            // Railway internal service hostnames: <service>.railway.internal
+            '^(.+\.)?railway\.internal$',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
