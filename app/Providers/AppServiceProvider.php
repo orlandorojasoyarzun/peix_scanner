@@ -46,7 +46,7 @@ class AppServiceProvider extends ServiceProvider
 
         $factory = fn () => new OpenRouterVisionAdapter(
             apiKey: (string) env('OPENROUTER_API_KEY'),
-            model: (string) env('OPENROUTER_MODEL', 'nvidia/nemotron-nano-12b-v2-vl:free'),
+            model: (string) env('OPENROUTER_MODEL'),
             breaker: $this->app->make(OpenRouterCircuitBreaker::class),
         );
 
