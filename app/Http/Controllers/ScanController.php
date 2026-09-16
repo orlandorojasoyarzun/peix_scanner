@@ -235,16 +235,10 @@ class ScanController
         $error = $state['error'] ?? null;
         $mode = $state['mode'] ?? 'fish';
         $imageUrl = $storedPath ? route('scan.image', $scan) : null;
-        $referenceImageUrl = $state['reference_image'] ?? null;
-
-        if ($referenceImageUrl === null && $result !== null && isset($result['scientific_name'])) {
-            $referenceImageUrl = $this->wikipedia->getSpeciesImage($result['scientific_name']);
-
-            if ($referenceImageUrl !== null) {
-                $state['reference_image'] = $referenceImageUrl;
-                $this->scanState->put($scan, $state);
-            }
-        }
+        // Wikipedia reference images disabled — always show the user's uploaded photo.
+        // The reference image lookup was causing broken images and complexity
+        // that isn't worth it for the MVP. Revisit when needed.
+        $referenceImageUrl = null;
 
         return view('pages.confirm', [
             'scan' => $scan,
@@ -266,8 +260,8 @@ class ScanController
         }
 
         $speciesParam = Str::slug($result['common_name']).'__'.Str::slug($result['scientific_name']);
-        $referenceImageUrl = $state['reference_image']
-            ?? $this->wikipedia->getSpeciesImage($result['scientific_name']);
+        // Wikipedia reference images disabled — only show the user's uploaded photo.
+        $referenceImageUrl = null;
 
         Cache::put(CacheKeys::speciesResult($speciesParam), [
             'scientific_name' => $result['scientific_name'],
@@ -275,6 +269,7 @@ class ScanController
             'common_name_local' => $this->cleanSpanishName($result['common_name_local'] ?? ''),
             'regional_names' => $result['regional_names'] ?? [],
             'image_path' => $state['image'] ?? null,
+            'scan_id' => $scan,
             'reference_image_url' => $referenceImageUrl,
         ], now()->addMinutes(30));
 

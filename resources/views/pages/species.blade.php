@@ -18,7 +18,10 @@
                 $displayLocal = (string) ($storedResult['common_name_local'] ?? '');
                 $displayEnglish = (string) ($storedResult['common_name'] ?? '');
                 $displayRegional = (array) ($storedResult['regional_names'] ?? []);
-                $imageUrl = $storedResult['reference_image_url'] ?? null;
+                // Use the user's uploaded photo via the scan image route.
+                // Wikipedia reference images are disabled.
+                $scanId = $storedResult['scan_id'] ?? null;
+                $imageUrl = $scanId ? route('scan.image', $scanId) : null;
             }
         @endphp
 
