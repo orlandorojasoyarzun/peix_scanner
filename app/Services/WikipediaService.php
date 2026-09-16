@@ -25,6 +25,7 @@ class WikipediaService
      */
     private const ALLOWED_THUMBNAIL_HOSTS = [
         'upload.wikimedia.org',
+        'thumb.wikimedia.org'
     ];
 
     public function getSpeciesImage(string $scientificName): ?string
