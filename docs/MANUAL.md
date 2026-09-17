@@ -2,7 +2,7 @@
 
 App web que reconoce la especie de un filete de pescado a partir de una foto (o de la foto de su etiqueta). Subes la imagen, una IA en la nube te dice qué pez es y te muestra una ficha con Nutrición, recomendaciones ("Para ti"), Sostenibilidad y Preparación.
 
-Estado: MVP funcional en `develop`. Probado localmente con PHP 8.4 (Herd) + SQLite (default) o PostgreSQL 17 (DBngin) en macOS.
+Estado: MVP funcional. Deploy en Railway (producción). Probado localmente con PHP 8.4 (Herd) + SQLite (default) o PostgreSQL en macOS.
 
 ---
 
@@ -10,13 +10,13 @@ Estado: MVP funcional en `develop`. Probado localmente con PHP 8.4 (Herd) + SQLi
 
 - **Backend**: Laravel 12 + PHP 8.4
 - **Frontend**: Blade + Alpine.js 3 (vía CDN) + Tailwind 4 (Vite 7, pnpm)
-- **IA**: OpenRouter (cloud) via `OpenRouterVisionAdapter` — `nvidia/nemotron-nano-12b-v2-vl:free`
+- **IA**: OpenRouter (cloud) via `OpenRouterVisionAdapter` — `inclusionai/ling-3.0-flash-vl:free` (configurable via `OPENROUTER_MODEL` env var)
 - **Datos nutricionales**: seed curado FEN (52 especies, principal) + USDA FoodData Central (fallback)
-- **Imagen de referencia**: Wikipedia REST API (con caché)
+- **Imagen de referencia**: Wikipedia REST API — **desactivada**. Se muestra la foto subida por el usuario en su lugar.
 - **Database**: SQLite por defecto; PostgreSQL 17 también soportado
 - **Testing**: Pest 3.8 + Larastan 3.10 + Pint
 - **Livewire 4**: instalado en `composer.json` pero **no se usa** en la app (solo `@livewireStyles`/`@livewireScripts` en el layout). Alpine.js cubre toda la interactividad.
-- **Sin auth, sin `users` table, sin deploy a producción**
+- **Sin auth, sin `users` table**. Deploy en Railway (producción + Postgres)
 
 ---
 
@@ -25,27 +25,27 @@ Estado: MVP funcional en `develop`. Probado localmente con PHP 8.4 (Herd) + SQLi
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │  USUARIO (navegador)                                                │
-│  1. Abre http://localhost:8000                                       │
-│  2. Click "Iniciar" → pantalla de escaneo                            │
-│  3. Elige modo: pez (foto) o etiqueta (OCR)                          │
-│  4. Sube foto del pez o de la etiqueta                               │
-│  5. Ve la especie detectada + nombre común ES + % confianza          │
-│  6. Confirma → ficha con tabs (Nutrición / Para ti / Prep / Sosten.) │
+│  1. Abre http://localhost:8000                                      │
+│  2. Click "Iniciar" → pantalla de escaneo                           │
+│  3. Elige modo: pez (foto) o etiqueta (OCR)                         │
+│  4. Sube foto del pez o de la etiqueta                              │
+│  5. Ve la especie detectada + nombre común ES + % confianza         │
+│  6. Confirma → ficha con tabs (Nutrición / Para ti / Prep / Sosten.)│
 └─────────────────────────────────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  HTTP LAYER (routes/web.php → ScanController / ScanImageController)  │
-│  GET  /                          → ScanController::home              │
-│  GET  /scan                      → ScanController::create            │
-│  POST /scan                      → ScanController::store       [ai]   │
-│  POST /scan/label                → ScanController::storeLabel   [ai]  │
-│  GET  /scan/{uuid}/confirm       → ScanController::confirm           │
-│  POST /scan/{uuid}/confirm       → ScanController::confirmStore      │
-│  GET  /scan/{uuid}/image         → ScanImageController::show         │
-│  POST /scan/{uuid}/rescan        → ScanController::rescan      [ai]  │
-│  GET  /species/{slug}            → ScanController::show              │
-│  POST /species/{slug}/explain    → ScanController::explain     [ai]  │
+│  HTTP LAYER (routes/web.php → ScanController / ScanImageController) │
+│  GET  /                          → ScanController::home             │
+│  GET  /scan                      → ScanController::create           │
+│  POST /scan                      → ScanController::store       [ai] │
+│  POST /scan/label                → ScanController::storeLabel   [ai]│
+│  GET  /scan/{uuid}/confirm       → ScanController::confirm          │
+│  POST /scan/{uuid}/confirm       → ScanController::confirmStore     │
+│  GET  /scan/{uuid}/image         → ScanImageController::show        │
+│  POST /scan/{uuid}/rescan        → ScanController::rescan      [ai] │
+│  GET  /species/{slug}            → ScanController::show             │
+│  POST /species/{slug}/explain    → ScanController::explain     [ai] │
 │                                                                     │
 │  [ai] = middleware throttle:ai (10 req/min por IP)                  │
 └─────────────────────────────────────────────────────────────────────┘
@@ -53,60 +53,62 @@ Estado: MVP funcional en `develop`. Probado localmente con PHP 8.4 (Herd) + SQLi
          ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │  APPLICATION LAYER                                                  │
-│  IdentifySpeciesAction::execute($imagePath) → IdentificationResult   │
-│  └─ inyecta SpeciesIdentifier (OpenRouterVisionAdapter)              │
+│  IdentifySpeciesAction::execute($imagePath) → IdentificationResult  │
+│  └─ inyecta SpeciesIdentifier (OpenRouterVisionAdapter)             │
 └─────────────────────────────────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │  DOMAIN LAYER                                                       │
-│  Contracts/SpeciesIdentifier (interface)                             │
-│  └─ OpenRouterVisionAdapter (cloud, visión)                          │
-│     ├─ identify()        → IdentificationResult (pez desde foto)     │
-│     ├─ identifyFromLabel() → ?string  (etiqueta → nombre común)      │
-│     └─ generateText()    → ?string  (explicación personalizada)      │
+│  Contracts/SpeciesIdentifier (interface)                            │
+│  └─ OpenRouterVisionAdapter (cloud, visión)                         │
+│     ├─ identify()        → IdentificationResult (pez desde foto)    │
+│     ├─ identifyFromLabel() → ?string  (etiqueta → nombre común)     │
+│     └─ generateText()    → ?string  (explicación personalizada)     │
 │                                                                     │
 │  ParsesVisionResponse (trait)                                       │
 │  └─ parseResponse(): convierte "Scientific (English), conf" → DTO   │
 │                                                                     │
 │  SpeciesLabelMapper                                                 │
-│  └─ map(): nombre común etiqueta → nombre científico                 │
+│  └─ map(): nombre común etiqueta → nombre científico                │
 │                                                                     │
-│  SpeciesTranslations::toSpanish() (mapeo EN→ES, 35+ especies)      │
-│  └─ fallback cuando la IA no devuelve "ES:" estructurado             │
+│  SpeciesTranslations::toSpanish() (mapeo EN→ES, 35+ especies)       │
+│  └─ fallback cuando la IA no devuelve "ES:" estructurado            │
 │                                                                     │
-│  DTOs/IdentificationResult                                           │
-│  ├─ scientificName, commonName, commonNameLocal                      │
-│  ├─ confidence, regionalNames                                        │
+│  DTOs/IdentificationResult                                          │
+│  ├─ scientificName, commonName, commonNameLocal                     │
+│  ├─ confidence, regionalNames                                       │
 │  └─ candidates[] (top 3)                                            │
 └─────────────────────────────────────────────────────────────────────┘
          │
          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  STORAGE                                                            │
-│  storage/app/private/scan-uploads/{uuid}.{ext}   (la foto, privado)  │
-│                                                                     │
-│  Cache (driver=database, TTL variables):                             │
-│  ├─ scan.{uuid}.result                  (10 min)  ← IdentificationResult │
-│  ├─ scan.{uuid}.image                   (10 min)  ← path privado        │
-│  ├─ scan.{uuid}.mode                    (10 min)  ← 'fish' | 'label'    │
-│  ├─ scan.{uuid}.error                   (10 min)  ← mensaje de error    │
-│  ├─ scan.{uuid}.reference_image         (30 min)  ← URL Wikipedia       │
-│  ├─ species.{slug}.result               (30 min)  ← datos para la ficha │
-│  ├─ explain.{slug}                      (24 h)    ← texto IA explicativo│
-│  ├─ wikipedia.image.{scientificName}    (60 min)  ← caché Wikipedia     │
-│  └─ usda.food.{es-name}[.{md5}]         (24 h)    ← caché USDA FDC     │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│  STORAGE                                                                 │
+│  storage/app/scan-uploads/{uuid}.jpg           (la foto, re-encodificada a JPEG) │
+│                                                                          │
+│  Cache (driver=database, TTL variables):                                 │
+│  ├─ scan.{uuid}.state                   (60 min) ← estado consolidado en │
+│  │                                          ScanStateStore (imagen, modo,│
+│  │                                          resultado o error, todo      │
+│  │                                          en un solo registro atómico)│
+│  ├─ species.{slug}.result               (30 min) ← datos para la ficha  │
+│  │                                            (nombres, scan_id para img)│
+│  ├─ explain.{slug}                      (24 h)    ← texto IA explicativo │
+│  ├─ wikipedia.image.{scientificName}    (60 min) ← URL Wikipedia (ya no  │
+│  │                                            se usa en la UI, pero     │
+│  │                                            cacheada por si se reactiva)│
+│  └─ usda.food.{es-name}[.{md5}]         (24 h)   ← caché USDA FDC        │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Flujo de la ficha (`GET /species/{slug}`)
 
 1. Lee `species.{slug}.result` de cache.
 2. `loadOrFetchNutrition()`:
-   1. Busca en `SpeciesNutritionSeed` (curado FEN, 52 especies) — **camino principal**.
-   2. Si no está, busca `nutrition_profiles` por `scientific_name`.
-   3. Si tampoco, llama a `FoodDataCentralService` (USDA FDC API) — **fallback**.
-   4. Si devuelve datos, persiste en `nutrition_profiles` para la próxima vez.
+  1. Busca en `SpeciesNutritionSeed` (curado FEN, 52 especies) — **camino principal**.
+  2. Si no está, busca `nutrition_profiles` por `scientific_name`.
+  3. Si tampoco, llama a `FoodDataCentralService` (USDA FDC API) — **fallback**.
+  4. Si devuelve datos, persiste en `nutrition_profiles` para la próxima vez.
 3. `NutritionAdvisor::recommendAll($nutrition)` → array de recomendaciones universales + todas las reglas por objetivo (deportista, perder peso, embarazo, sostenibilidad). Dedupica por título.
 4. Renderiza `pages/species.blade.php` con tabs.
 
@@ -121,14 +123,10 @@ Solo se invoca cuando el usuario hace click en 🪄 "Quiero una explicación per
 **Binding** en `app/Providers/AppServiceProvider.php`:
 
 ```php
-$this->app->bind(SpeciesIdentifier::class, fn () => new OpenRouterVisionAdapter(
-    apiKey: env('OPENROUTER_API_KEY'),
-    model: env('OPENROUTER_MODEL', 'nvidia/nemotron-nano-12b-v2-vl:free'),
-));
-
 $this->app->bind(OpenRouterVisionAdapter::class, fn () => new OpenRouterVisionAdapter(
-    apiKey: env('OPENROUTER_API_KEY'),
-    model: env('OPENROUTER_MODEL', 'nvidia/nemotron-nano-12b-v2-vl:free'),
+    apiKey: (string) env('OPENROUTER_API_KEY'),
+    model: (string) env('OPENROUTER_MODEL'),  // sin default — debe estar en env
+    breaker: $app->make(OpenRouterCircuitBreaker::class),
 ));
 ```
 
@@ -136,8 +134,10 @@ $this->app->bind(OpenRouterVisionAdapter::class, fn () => new OpenRouterVisionAd
 
 ```env
 OPENROUTER_API_KEY=sk-or-v1-xxxxxxxx
-OPENROUTER_MODEL=nvidia/nemotron-nano-12b-v2-vl:free
+OPENROUTER_MODEL=inclusionai/ling-3.0-flash-vl:free
 ```
+
+El modelo se configura en Railway como variable de entorno; en local leer del `.env`.
 
 **Rate limit** (en `AppServiceProvider::boot()`):
 
@@ -147,32 +147,38 @@ RateLimiter::for('ai', fn ($r) => Limit::perMinute(10)->by($r->ip()));
 
 Aplicado a `POST /scan`, `POST /scan/label`, `POST /scan/{uuid}/rescan`, `POST /species/{slug}/explain`.
 
-**Modelos gratuitos en OpenRouter verificados:**
-- `nvidia/nemotron-nano-12b-v2-vl:free` ← default, visión
-- `google/gemma-3-27b-it:free` (visión)
-- `qwen/qwen-2-vl-7b-instruct:free` (chino, fuerte en detalles)
-- `openrouter/free` (auto-router)
+**Modelo en uso:** `inclusionai/ling-3.0-flash-vl:free`
+
+- Funciona bien para identificación de especies (Lubina → Dicentrarchus labrax, 100% confidence)
+- Free tier — no consume crédito
+- Para cambiarlo, setear `OPENROUTER_MODEL` en el entorno (Railway o `.env`)
 
 ---
 
 ## Modos de escaneo
 
 ### Foto de pez (fish mode)
+
 POST /scan → `ScanController::store`:
+
 - Valida con `ScanImageRequest` (image, mimes:jpeg,jpg,png,webp, max:8192)
 - Guarda en `storage/app/private/scan-uploads/{uuid}.{ext}`
 - `IdentifySpeciesAction::execute()` → `OpenRouterVisionAdapter::identify()`
 - Resultado cacheado en `scan.{uuid}.result`
 
 ### Foto de etiqueta (label mode)
+
 POST /scan/label → `ScanController::storeLabel`:
+
 - Misma validación y guardado
 - `OpenRouterVisionAdapter::identifyFromLabel()` → nombre común en ES
 - `SpeciesLabelMapper::map()` → nombre científico
 - Si no se reconoce especie → error cacheado, vista muestra mensaje
 
 ### Reintento
+
 POST /scan/{uuid}/rescan → `ScanController::rescan`:
+
 - Lee modo (fish|label) de cache
 - Delega a `rescanFish()` o `rescanLabel()` según modo
 - Actualiza cache `scan.{uuid}.result` y limpia `scan.{uuid}.error`
@@ -214,7 +220,7 @@ app/
 ├── Providers/AppServiceProvider.php           (binding OpenRouter + RateLimiter 'ai')
 └── Services/
     ├── FoodDataCentralService.php             (USDA FDC, fallback nutricional)
-    └── WikipediaService.php                   (imagen referencia, cache 60 min)
+    └── WikipediaService.php                   (Wikipedia API, allowlist de hosts, actualmente desactivada para la UI)
 
 resources/
 ├── css/app.css                                (design system + Tailwind 4)
@@ -234,7 +240,7 @@ public/
 ├── demo/peix_scanner_demo.gif                 (gif del README)
 └── build/                                     (assets generados por Vite)
 
-storage/app/private/scan-uploads/              (fotos de usuarios, privado)
+storage/app/scan-uploads/                 (fotos de usuarios, re-encodificadas a JPEG por ImageProcessor)
 ```
 
 ---
@@ -318,6 +324,7 @@ git rebase origin/develop
 ```
 
 **Convención:**
+
 - Mensajes de commit en **español**, una línea, descriptivos (no "fix")
 - **No push** a `develop` (está protegido contra force-push/delete)
 - **No PRs automáticos**: tú los apruebas en GitHub web
@@ -326,10 +333,11 @@ git rebase origin/develop
 
 ## Limitaciones conocidas
 
-- **Sin auth / sin deploy**: solo funciona local. El "ownership" de las imágenes se aproxima por UUID en cache (cualquiera con el UUID puede ver la imagen; el threat model es equivalente al del resto del flujo cache-as-session).
+- **Sin auth**: el "ownership" de las imágenes se aproxima por UUID en cache (cualquiera con el UUID puede ver la imagen; el threat model es equivalente al del resto del flujo cache-as-session).
 - **Tabs Sostenibilidad y Preparación**: la pestaña Sostenibilidad está **vacía** (sin contenido renderizado). Preparación muestra placeholder. Pendiente: integrar FishBase + generación de texto.
 - **Tab "Para ti"**: ahora muestra TODAS las recomendaciones (universales + por objetivo combinadas y deducadas). Sin selector reactivo.
 - **Cache en DB**: CACHE_STORE=database, así que sobrevive a reinicios del server.
 - **Storage crece**: las fotos se purgan con `php artisan scans:purge` (no hay cron configurado todavía).
 - **Tasa de acierto del modelo**: ~80% con peces enteros, ~60-70% con filetes.
 - **CSS recompilado manualmente**: si modificas `resources/css/app.css`, ejecuta `pnpm run build` (o `pnpm run dev` para HMR).
+
