@@ -34,7 +34,7 @@ If confidence is low or the user thinks the detection is wrong, they can correct
 
 **Database**: PostgreSQL (locally any version; Railway provides the production instance). No `users` table (conscious decision: MVP has no auth, none needed).
 
-**AI**: OpenAI `gpt-4o` via `OpenAIVisionAdapter` (vision model). Falls back to OpenRouter free tier if needed.
+**AI**: OpenAI `gpt-4o` via `OpenAIVisionAdapter` (vision model).
 
 **Not built yet**: FishBase integration for sustainability data, text generation for the Preparation tab (currently placeholders).
 
@@ -46,7 +46,7 @@ If confidence is low or the user thinks the detection is wrong, they can correct
 app/
 ├── Domain/                          ← model + business rules
 │   ├── Ai/
-│   │   ├── Adapters/                ← OpenRouterVisionAdapter
+│   │   ├── Adapters/                ← OpenAIVisionAdapter
 │   │   ├── Contracts/               ← SpeciesIdentifier interface
 │   │   ├── DTOs/                    ← IdentificationResult
 │   │   └── SpeciesTranslations.php  ← curated fallback for 35+ species
@@ -130,7 +130,6 @@ The app ships with `Procfile`, `nixpacks.toml`, `railway.toml` and `.dockerignor
 | `LOG_CHANNEL` | `stderr` | JSON-formatted; auto-set when `APP_ENV=production` |
 | `OPENAI_API_KEY` | `sk-…` | OpenAI key; inject via Railway Variables |
 | `OPENAI_MODEL` | `gpt-4o` | vision model (gpt-4o-mini for cheaper/faster) |
-| `OPENROUTER_API_KEY` | `sk-or-v1-…` | fallback; inject via Railway Variables |
 | `USDA_API_KEY` | `…` | rotated; inject via Railway Variables |
 | `OCTANE_SERVER` | `frankenphp` | baked into the Procfile but exposed for clarity |
 

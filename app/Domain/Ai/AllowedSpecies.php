@@ -12,7 +12,7 @@ namespace App\Domain\Ai;
  * nutrition lookup. Adding a species here is the *only* way to make the
  * app recognise it — even if the AI model returns it confidently.
  *
- * The list mirrors the PROMPT in `OpenRouterVisionAdapter`. If you change
+ * The list mirrors the PROMPT in `OpenAIVisionAdapter`. If you change
  * one, change the other.
  *
  * The shape of each entry is:

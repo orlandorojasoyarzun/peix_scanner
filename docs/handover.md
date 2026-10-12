@@ -9,7 +9,7 @@
 
 **Peix Scanner** es una app Laravel que permite identificar pescado fresco o etiquetas de packaged seafood via visión artificial, y mostrar una ficha nutricional detallada.
 
-- **IA**: OpenAI `gpt-4o` (visión) + OpenRouter `inclusionai/ling-3.0-flash-vl:free` (fallback). `gpt-4o` para máxima accuracy.
+- **IA**: OpenAI `gpt-4o` (visión) via `OpenAIVisionAdapter`. Máxima accuracy.
 - **Repositorio**: `https://github.com/orlandorojasoyarzun/peix_scanner`
 - **Rama de trabajo**: `develop`
 - **Producción**: Railway (app principal + Postgres)
@@ -36,8 +36,6 @@
      ▼
 ┌─────────────────────┐
 │ OpenAIVisionAdapter │ ← identificación via IA (gpt-4o, máximo accuracy)
-│ (OpenRouterVision    │    OpenRouter como fallback
-│  como fallback)      │
 └─────────────────────┘
      │
      ▼
@@ -57,15 +55,13 @@
 - Máximo accuracy — robusto con luz rara, filetes cortados, reflejos
 - Configurable via `OPENAI_MODEL` env var (default: `gpt-4o`)
 - Para costo menor: `gpt-4o-mini` (mismo adapter, cambiar env var)
-- El `OpenRouterVisionAdapter` queda disponible como fallback
 
 ### Prompt del modelo
 El prompt está en `OpenAIVisionAdapter::PROMPT` y define una lista curada de ~60 especies de pescado/marisco comercializadas en España. El modelo responde con las 3 especies más probables y su confidence.
 
 ### Ubicación del código
 - `app/Domain/Ai/Adapters/OpenAIVisionAdapter.php` — implementación activa
-- `app/Domain/Ai/Adapters/OpenRouterVisionAdapter.php` — fallback (disponible)
-- Binding en `AppServiceProvider` — para switchear, cambiar el factory
+- Binding en `AppServiceProvider`
 
 ---
 
@@ -127,26 +123,11 @@ En Railway con FrankenPHP runtime, la extensión GD puede no cargarse al inicio.
 
 ---
 
-## 7. Feature: Circuit Breaker para OpenRouter
-
-### Qué hace
-`OpenRouterCircuitBreaker` evita chiamar OpenRouter cuando detecta que está fallando (5xx, 429 repetidos, errores de transporte).
-
-### Ubicación
-- `app/Domain/Ai/Support/OpenRouterCircuitBreaker.php`
-- Se inyecta en `OpenRouterVisionAdapter`
-- TTL: 5 minutos de lockout cuando está abierto
-
-### Logs
-Cuando el breaker está abierto, cualquier identificación va a `IdentificationFailedException::REASON_CIRCUIT_OPEN` → el usuario ve un error amigable.
-
----
-
-## 8. Feature: Label Scan (escaneo de etiqueta)
+## 7. Feature: Label Scan (escaneo de etiqueta)
 
 ### Flujo
 1. Usuario elige modo "etiqueta" → `UploadController@storeLabel`
-2. `identifyFromLabel()` en `OpenRouterVisionAdapter` extrae texto de la imagen de la etiqueta
+2. `identifyFromLabel()` en `OpenAIVisionAdapter` extrae texto de la imagen de la etiqueta
 3. Se guarda en `scanState` y se redirige a `scan.confirm` con `mode=label`
 4. El usuario confirma → `confirmStore()` genera la página de especie
 
@@ -156,18 +137,18 @@ Cuando el breaker está abierto, cualquier identificación va a `IdentificationF
 
 ---
 
-## 9. Estado de los paneles en la página de especie
+## 8. Estado de los paneles en la página de especie
 
 | Panel | Estado | Notas |
 |---|---|---|
 | **Nutrición** | ✅ Funcionando | Datos de USDA FoodData Central o tabla local Species/nutritionProfile |
-| **Para ti (🪄)** | ✅ Funcionando | Genera explicación personalizada via `generateText()` de OpenRouter. Cachea resultado. |
+| **Para ti (🪄)** | ✅ Funcionando | Genera explicación personalizada via `generateText()` de OpenAI. Cachea resultado. |
 | **Sostenibilidad** | ❌ Placeholder | Texto "se completará cuando conectemos..." |
 | **Preparación** | ❌ Placeholder | Texto "se completará cuando conectemos..." |
 
 ---
 
-## 10. Caché — Keys y TTL
+## 9. Caché — Keys y TTL
 
 | Key | TTL | Contenido |
 |---|---|---|
@@ -188,12 +169,12 @@ php artisan cache:forget species.{slug}.result
 
 ---
 
-## 11. Environment variables (Railway + local)
+## 10. Environment variables (Railway + local)
 
 ### Requeridas
 ```
-OPENROUTER_API_KEY=sk-...
-OPENROUTER_MODEL=inclusionai/ling-3.0-flash-vl:free
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o
 APP_ENV=production  # o local
 APP_DEBUG=false
 ```
@@ -208,22 +189,21 @@ El archivo `.env` local tiene las mismas keys. Asegurarse de que `APP_DEBUG=true
 
 ---
 
-## 12. Known issues / Pending work
+## 11. Known issues / Pending work
 
 ### Alto priority
 - **Ninguno crítico reportado**
 
 ### Medium priority
-- Los paneles de Sostenibilidad y Preparación son placeholders (ver sección 9)
+- Los paneles de Sostenibilidad y Preparación son placeholders (ver sección 8)
 
 ### Bajo priority / nice to have
 - Wikipedia reference images podrían reactivarse en el futuro si se quiere
 - Mejorar parsing de regional_names del modelo (a veces devuelve nombres en vez de array)
-- Test coverage para `OpenRouterVisionAdapter::parseLabelResponse()` con casos edge
 
 ---
 
-## 13. Testing notes
+## 12. Testing notes
 
 ### Cómo testear localmente
 
@@ -247,21 +227,19 @@ El archivo `.env` local tiene las mismas keys. Asegurarse de que `APP_DEBUG=true
    - Usar iPhone para sacar foto → subir → verificar que se convierta a JPEG sin error
 
 ### Logs relevantes
-- `OpenRouter circuit breaker` — para ver si el breaker está activo
+- `OpenAI HTTP error response` — si el modelo falla
 - `Wikipedia thumbnail URL host not in allowlist` — si se reactiva Wikipedia
-- `OpenRouter HTTP error response` — si el modelo falla
 
 ---
 
-## 14. Archivos clave y owners
+## 13. Archivos clave y owners
 
 | Archivo | Qué contiene |
 |---|---|
-| `app/Domain/Ai/Adapters/OpenRouterVisionAdapter.php` | Prompt, lógica de identificación, circuit breaker |
+| `app/Domain/Ai/Adapters/OpenAIVisionAdapter.php` | Prompt, lógica de identificación via GPT-4o |
 | `app/Http/Controllers/ScanController.php` | Flujo completo: upload → scan → confirm → species page |
 | `app/Services/WikipediaService.php` | Wikipedia API (parcialmente desactivado) |
 | `app/Services/ImageProcessor.php` | HEIC→JPEG, WebP handling |
-| `app/Domain/Support/OpenRouterCircuitBreaker.php` | Circuit breaker para OpenRouter |
 | `app/Domain/Nutrition/NutritionAdvisor.php` | Recomendaciones nutricionales basadas en datos |
 | `app/Domain/Nutrition/SpeciesNutritionSeed.php` | Seed data nutricional offline para especies conocidas |
 | `resources/views/pages/confirm.blade.php` | Vista de confirmación |
@@ -270,23 +248,20 @@ El archivo `.env` local tiene las mismas keys. Asegurarse de que `APP_DEBUG=true
 
 ---
 
-## 15. Decisiones de diseño documentadas
+## 14. Decisiones de diseño documentadas
 
-### Por qué no Imagenomics/OT-2
-Se evaluó `anthropic/claude-3.5-sonnet` y `google/gemini-2.0-flash-exp` pero el modelo free de `inclusionai` funciona bien y no consume crédito.
+### Por qué GPT-4o y no otro modelo
+Se evaluaron otros modelos de visión pero `gpt-4o` ofrece la mejor accuracy en condiciones de supermercado (luz irregular, filetes cortados, reflejos). El costo es aceptable con los créditos disponibles.
 
 ### Por qué Wikipedia desactivado
 El MVP no lo necesita. La foto del usuario es suficiente referencia visual.
-
-### Por qué circuit breaker
-OpenRouter tiene rate limits y outages. Sin breaker, cada request nuevo seguía chiamando un servicio caído → quota quemada + usuario viendo errores técnicos.
 
 ### Por qué Cache-based state (scanState)
 No se usa DB para el estado intermedio del scan (identificación, confirmación). Todo va a Laravel Cache con TTL. La página de especie usa Cache definitivo (30 min TTL). Esto simplifica el flujo y evita DB writes en el happy path.
 
 ---
 
-## 16. Git workflow actual
+## 15. Git workflow actual
 
 - **Rama principal**: `main` (producción)
 - **Rama de trabajo**: `develop`
@@ -295,9 +270,7 @@ No se usa DB para el estado intermedio del scan (identificación, confirmación)
 
 ### Archivos modificados actualmente (sin commitear)
 ```
-app/Http/Controllers/ScanController.php
-app/Services/WikipediaService.php
-resources/views/pages/species.blade.php
+(ninguno — árbol limpio)
 ```
 
 ---

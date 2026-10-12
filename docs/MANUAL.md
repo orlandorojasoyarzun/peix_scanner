@@ -10,7 +10,7 @@ Estado: MVP funcional. Deploy en Railway (producción). Probado localmente con P
 
 - **Backend**: Laravel 12 + PHP 8.4
 - **Frontend**: Blade + Alpine.js 3 (vía CDN) + Tailwind 4 (Vite 7, pnpm)
-- **IA**: OpenRouter (cloud) via `OpenRouterVisionAdapter` — `inclusionai/ling-3.0-flash-vl:free` (configurable via `OPENROUTER_MODEL` env var)
+- **IA**: OpenAI (cloud) via `OpenAIVisionAdapter` — `gpt-4o` (configurable via `OPENAI_MODEL` env var)
 - **Datos nutricionales**: seed curado FEN (52 especies, principal) + USDA FoodData Central (fallback)
 - **Imagen de referencia**: Wikipedia REST API — **desactivada**. Se muestra la foto subida por el usuario en su lugar.
 - **Database**: SQLite por defecto; PostgreSQL 17 también soportado
@@ -54,14 +54,14 @@ Estado: MVP funcional. Deploy en Railway (producción). Probado localmente con P
 ┌─────────────────────────────────────────────────────────────────────┐
 │  APPLICATION LAYER                                                  │
 │  IdentifySpeciesAction::execute($imagePath) → IdentificationResult  │
-│  └─ inyecta SpeciesIdentifier (OpenRouterVisionAdapter)             │
+│  └─ inyecta SpeciesIdentifier (OpenAIVisionAdapter)                │
 └─────────────────────────────────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │  DOMAIN LAYER                                                       │
 │  Contracts/SpeciesIdentifier (interface)                            │
-│  └─ OpenRouterVisionAdapter (cloud, visión)                         │
+│  └─ OpenAIVisionAdapter (cloud, visión)                            │
 │     ├─ identify()        → IdentificationResult (pez desde foto)    │
 │     ├─ identifyFromLabel() → ?string  (etiqueta → nombre común)     │
 │     └─ generateText()    → ?string  (explicación personalizada)     │
@@ -114,30 +114,29 @@ Estado: MVP funcional. Deploy en Railway (producción). Probado localmente con P
 
 ### Flujo de "explicación personalizada" (`POST /species/{slug}/explain`)
 
-Solo se invoca cuando el usuario hace click en 🪄 "Quiero una explicación personalizada". Construye un prompt con los datos nutricionales + mercurio y pide a `OpenRouterVisionAdapter::generateText()` que redacte 2-3 párrafos. Cache 24 h por especie.
+Solo se invoca cuando el usuario hace click en 🪄 "Quiero una explicación personalizada". Construye un prompt con los datos nutricionales + mercurio y pide a `OpenAIVisionAdapter::generateText()` que redacte 2-3 párrafos. Cache 24 h por especie.
 
 ---
 
-## IA: OpenRouter
+## IA: OpenAI
 
 **Binding** en `app/Providers/AppServiceProvider.php`:
 
 ```php
-$this->app->bind(OpenRouterVisionAdapter::class, fn () => new OpenRouterVisionAdapter(
-    apiKey: (string) env('OPENROUTER_API_KEY'),
-    model: (string) env('OPENROUTER_MODEL'),  // sin default — debe estar en env
-    breaker: $app->make(OpenRouterCircuitBreaker::class),
-));
+$factory = fn () => new OpenAIVisionAdapter(
+    apiKey: (string) env('OPENAI_API_KEY'),
+    model: (string) env('OPENAI_MODEL', 'gpt-4o'),
+);
+$this->app->bind(SpeciesIdentifier::class, $factory);
+$this->app->bind(OpenAIVisionAdapter::class, $factory);
 ```
 
 **Configuración vía `.env`:**
 
 ```env
-OPENROUTER_API_KEY=sk-or-v1-xxxxxxxx
-OPENROUTER_MODEL=inclusionai/ling-3.0-flash-vl:free
+OPENAI_API_KEY=sk-xxxxxxxx
+OPENAI_MODEL=gpt-4o
 ```
-
-El modelo se configura en Railway como variable de entorno; en local leer del `.env`.
 
 **Rate limit** (en `AppServiceProvider::boot()`):
 
@@ -147,11 +146,10 @@ RateLimiter::for('ai', fn ($r) => Limit::perMinute(10)->by($r->ip()));
 
 Aplicado a `POST /scan`, `POST /scan/label`, `POST /scan/{uuid}/rescan`, `POST /species/{slug}/explain`.
 
-**Modelo en uso:** `inclusionai/ling-3.0-flash-vl:free`
+**Modelo en uso:** `gpt-4o`
 
-- Funciona bien para identificación de especies (Lubina → Dicentrarchus labrax, 100% confidence)
-- Free tier — no consume crédito
-- Para cambiarlo, setear `OPENROUTER_MODEL` en el entorno (Railway o `.env`)
+- Máximo accuracy en identificación de especies (Lubina → Dicentrarchus labrax, condiciones de supermercado)
+- Para costo menor: `gpt-4o-mini` (mismo adapter, cambiar `OPENAI_MODEL`)
 
 ---
 
@@ -163,7 +161,7 @@ POST /scan → `ScanController::store`:
 
 - Valida con `ScanImageRequest` (image, mimes:jpeg,jpg,png,webp, max:8192)
 - Guarda en `storage/app/private/scan-uploads/{uuid}.{ext}`
-- `IdentifySpeciesAction::execute()` → `OpenRouterVisionAdapter::identify()`
+- `IdentifySpeciesAction::execute()` → `OpenAIVisionAdapter::identify()`
 - Resultado cacheado en `scan.{uuid}.result`
 
 ### Foto de etiqueta (label mode)
@@ -171,7 +169,7 @@ POST /scan → `ScanController::store`:
 POST /scan/label → `ScanController::storeLabel`:
 
 - Misma validación y guardado
-- `OpenRouterVisionAdapter::identifyFromLabel()` → nombre común en ES
+- `OpenAIVisionAdapter::identifyFromLabel()` → nombre común en ES
 - `SpeciesLabelMapper::map()` → nombre científico
 - Si no se reconoce especie → error cacheado, vista muestra mensaje
 
@@ -191,7 +189,7 @@ POST /scan/{uuid}/rescan → `ScanController::rescan`:
 app/
 ├── Domain/
 │   ├── Ai/
-│   │   ├── Adapters/OpenRouterVisionAdapter.php
+│   │   ├── Adapters/OpenAIVisionAdapter.php
 │   │   ├── Contracts/SpeciesIdentifier.php
 │   │   ├── DTOs/IdentificationResult.php
 │   │   ├── Exceptions/IdentificationFailedException.php
@@ -217,7 +215,7 @@ app/
 │   │   ├── ScanController.php                 (home/scan/confirm/species/explain)
 │   │   └── ScanImageController.php            (sirve fotos privadas con gate de cache)
 │   └── Requests/ScanImageRequest.php
-├── Providers/AppServiceProvider.php           (binding OpenRouter + RateLimiter 'ai')
+├── Providers/AppServiceProvider.php           (binding OpenAI + RateLimiter 'ai')
 └── Services/
     ├── FoodDataCentralService.php             (USDA FDC, fallback nutricional)
     └── WikipediaService.php                   (Wikipedia API, allowlist de hosts, actualmente desactivada para la UI)
