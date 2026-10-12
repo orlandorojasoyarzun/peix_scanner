@@ -29,7 +29,7 @@ class NutritionAdvisor
     {
         $recommendations = self::universalRecommendations($nutrition);
 
-        foreach ([UserGoal::Athlete, UserGoal::WeightLoss, UserGoal::Pregnancy, UserGoal::Sustainability] as $goal) {
+        foreach ([UserGoal::Athlete, UserGoal::WeightLoss, UserGoal::Sustainability] as $goal) {
             $goalRecs = self::goalSpecificRecommendations($nutrition, $goal);
             foreach ($goalRecs as $rec) {
                 $duplicated = false;
@@ -124,8 +124,8 @@ class NutritionAdvisor
         return match ($goal) {
             UserGoal::Athlete => self::athleteRules($n),
             UserGoal::WeightLoss => self::weightLossRules($n),
-            UserGoal::Pregnancy => self::pregnancyRules($n),
             UserGoal::Sustainability => self::sustainabilityRules($n),
+            UserGoal::Pregnancy => [], // disabled: mercury data insufficient for reliable recommendations
             UserGoal::None => [],
         };
     }
@@ -186,35 +186,6 @@ class NutritionAdvisor
             $r[] = self::rec('⭐', self::TONE_POSITIVE,
                 'Perfecto para perder peso',
                 'Alta proteína con muy poca grasa. Te mantiene saciado sin sumar calorías.');
-        }
-
-        return $r;
-    }
-
-    private static function pregnancyRules(array $n): array
-    {
-        $r = [];
-        $mercury = (float) ($n['contaminants']['methylmercury_mg_per_kg'] ?? 0);
-        $omega3 = (float) ($n['omega3'] ?? 0);
-
-        if ($mercury >= 0.5) {
-            $r[] = self::rec('🚫', self::TONE_CAUTION,
-                'Evitar durante embarazo',
-                'Mercurio alto. Recomendado sustituirlo por pescado blanco magro hasta finalizar la lactancia.');
-        } elseif ($mercury >= 0.3) {
-            $r[] = self::rec('⚠️', self::TONE_CAUTION,
-                'Consumo moderado en embarazo',
-                "Mercurio ({$mercury} mg/kg). Limitar a una vez cada dos semanas como máximo.");
-        } else {
-            $r[] = self::rec('✅', self::TONE_POSITIVE,
-                'Apto para embarazo',
-                'Bajo en mercurio. Apto para embarazadas y lactantes.');
-        }
-
-        if ($omega3 >= 2) {
-            $r[] = self::rec('🤱', self::TONE_POSITIVE,
-                'Beneficioso para el desarrollo fetal',
-                'Aporte importante de DHA (Omega-3), esencial para el desarrollo neurológico del bebé.');
         }
 
         return $r;
