@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Application\Actions\IdentifySpeciesAction;
-use App\Domain\Ai\Adapters\OpenRouterVisionAdapter;
+use App\Domain\Ai\Adapters\OpenAIVisionAdapter;
 use App\Domain\Ai\AllowedSpecies;
 use App\Domain\Ai\Exceptions\IdentificationFailedException;
 use App\Domain\Ai\SpeciesLabelMapper;
@@ -34,7 +34,7 @@ class ScanController
         private readonly WikipediaService $wikipedia,
         private readonly SpeciesLabelMapper $labelMapper,
         private readonly FoodDataCentralService $fdc,
-        private readonly OpenRouterVisionAdapter $openRouter,
+        private readonly OpenAIVisionAdapter $openRouter,
         private readonly ImageProcessor $imageProcessor,
         private readonly ScanStateStore $scanState,
     ) {}
@@ -118,7 +118,7 @@ class ScanController
         return redirect()->route('scan.confirm', $scanId);
     }
 
-    public function storeLabel(ScanImageRequest $request, OpenRouterVisionAdapter $adapter): RedirectResponse
+    public function storeLabel(ScanImageRequest $request, OpenAIVisionAdapter $adapter): RedirectResponse
     {
         set_time_limit(180);
 
@@ -276,7 +276,7 @@ class ScanController
         return redirect()->route('species.show', $speciesParam);
     }
 
-    public function rescan(string $scan, IdentifySpeciesAction $action, OpenRouterVisionAdapter $adapter): RedirectResponse
+    public function rescan(string $scan, IdentifySpeciesAction $action, OpenAIVisionAdapter $adapter): RedirectResponse
     {
         set_time_limit(180);
 
@@ -338,7 +338,7 @@ class ScanController
         return redirect()->route('scan.confirm', $scan);
     }
 
-    private function rescanLabel(string $scan, string $absolutePath, OpenRouterVisionAdapter $adapter): RedirectResponse
+    private function rescanLabel(string $scan, string $absolutePath, OpenAIVisionAdapter $adapter): RedirectResponse
     {
         try {
             $labelText = $adapter->identifyFromLabel($absolutePath);

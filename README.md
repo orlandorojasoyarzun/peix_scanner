@@ -34,7 +34,7 @@ If confidence is low or the user thinks the detection is wrong, they can correct
 
 **Database**: PostgreSQL (locally any version; Railway provides the production instance). No `users` table (conscious decision: MVP has no auth, none needed).
 
-**AI**: OpenRouter via `OpenRouterVisionAdapter` using `inclusionai/ling-3.0-flash-vl:free` (free tier, no credit consumption).
+**AI**: OpenAI `gpt-4o` via `OpenAIVisionAdapter` (vision model). Falls back to OpenRouter free tier if needed.
 
 **Not built yet**: FishBase integration for sustainability data, text generation for the Preparation tab (currently placeholders).
 
@@ -128,8 +128,9 @@ The app ships with `Procfile`, `nixpacks.toml`, `railway.toml` and `.dockerignor
 | `SESSION_ENCRYPT` | `true` | default already, but explicit is safer |
 | `SESSION_SECURE_COOKIE` | `true` | auto-true when `APP_ENV=production`, but explicit for clarity |
 | `LOG_CHANNEL` | `stderr` | JSON-formatted; auto-set when `APP_ENV=production` |
-| `OPENROUTER_API_KEY` | `sk-or-v1-…` | rotated; inject via Railway Variables |
-| `OPENROUTER_MODEL` | `inclusionai/ling-3.0-flash-vl:free` | current model |
+| `OPENAI_API_KEY` | `sk-…` | OpenAI key; inject via Railway Variables |
+| `OPENAI_MODEL` | `gpt-4o` | vision model (gpt-4o-mini for cheaper/faster) |
+| `OPENROUTER_API_KEY` | `sk-or-v1-…` | fallback; inject via Railway Variables |
 | `USDA_API_KEY` | `…` | rotated; inject via Railway Variables |
 | `OCTANE_SERVER` | `frankenphp` | baked into the Procfile but exposed for clarity |
 

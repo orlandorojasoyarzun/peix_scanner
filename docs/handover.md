@@ -9,7 +9,7 @@
 
 **Peix Scanner** es una app Laravel que permite identificar pescado fresco o etiquetas de packaged seafood via visión artificial, y mostrar una ficha nutricional detallada.
 
-- **Stack**: Laravel (FrankenPHP runtime en Railway), Blade + Alpine.js, Tailwind CSS
+- **IA**: OpenAI `gpt-4o` (visión) + OpenRouter `inclusionai/ling-3.0-flash-vl:free` (fallback). `gpt-4o` para máxima accuracy.
 - **Repositorio**: `https://github.com/orlandorojasoyarzun/peix_scanner`
 - **Rama de trabajo**: `develop`
 - **Producción**: Railway (app principal + Postgres)
@@ -35,8 +35,9 @@
      │
      ▼
 ┌─────────────────────┐
-│ OpenRouterVision    │ ← identificación via IA (vision model)
-│ Adapter             │
+│ OpenAIVisionAdapter │ ← identificación via IA (gpt-4o, máximo accuracy)
+│ (OpenRouterVision    │    OpenRouter como fallback
+│  como fallback)      │
 └─────────────────────┘
      │
      ▼
@@ -48,22 +49,23 @@
 
 ---
 
-## 3. Modelo de IA — Decisión importante
+## 3. Modelo de IA
 
-### Solución actual
-Modelo en uso: **`inclusionai/ling-3.0-flash-vl:free`**
+### Modelo actual
+**`gpt-4o`** via OpenAI API (`OpenAIVisionAdapter`).
 
-- Funciona perfectamente para identificación de especies (respuesta: Lubina → Dicentrarchus labrax, 100% confidence)
-- Es **free tier** — no consume crédito de OpenRouter
-- Se configura vía variable de entorno `OPENROUTER_MODEL`
-- En **Railway** esta variable está seteada en el entorno; en **local** se lee del `.env`
+- Máximo accuracy — robusto con luz rara, filetes cortados, reflejos
+- Configurable via `OPENAI_MODEL` env var (default: `gpt-4o`)
+- Para costo menor: `gpt-4o-mini` (mismo adapter, cambiar env var)
+- El `OpenRouterVisionAdapter` queda disponible como fallback
 
 ### Prompt del modelo
-El prompt está en `OpenRouterVisionAdapter::PROMPT` y define una lista curada de ~60 especies de pescado/marisco comercializadas en España. El modelo responde con las 3 especies más probables y su confidence.
+El prompt está en `OpenAIVisionAdapter::PROMPT` y define una lista curada de ~60 especies de pescado/marisco comercializadas en España. El modelo responde con las 3 especies más probables y su confidence.
 
 ### Ubicación del código
-- `app/Domain/Ai/Adapters/OpenRouterVisionAdapter.php` — Prompt + lógica de parseo
-- Variable de entorno: `OPENROUTER_MODEL` (default: `inclusionai/ling-3.0-flash-vl:free`)
+- `app/Domain/Ai/Adapters/OpenAIVisionAdapter.php` — implementación activa
+- `app/Domain/Ai/Adapters/OpenRouterVisionAdapter.php` — fallback (disponible)
+- Binding en `AppServiceProvider` — para switchear, cambiar el factory
 
 ---
 

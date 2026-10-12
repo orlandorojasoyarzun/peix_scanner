@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Domain\Ai\Adapters\OpenAIVisionAdapter;
 use App\Domain\Ai\Adapters\OpenRouterVisionAdapter;
 use App\Domain\Ai\Contracts\SpeciesIdentifier;
 use App\Domain\Ai\Support\OpenRouterCircuitBreaker;
@@ -32,6 +33,7 @@ class AppServiceProvider extends ServiceProvider
         'https://en.wikipedia.org/*',
         'https://upload.wikimedia.org/*',
         'https://openrouter.ai/*',
+        'https://api.openai.com/*',
     ];
 
     public function register(): void
@@ -44,14 +46,13 @@ class AppServiceProvider extends ServiceProvider
             return new ScanStateStore($app->make('cache')->store());
         });
 
-        $factory = fn () => new OpenRouterVisionAdapter(
-            apiKey: (string) env('OPENROUTER_API_KEY'),
-            model: (string) env('OPENROUTER_MODEL'),
-            breaker: $this->app->make(OpenRouterCircuitBreaker::class),
+        $factory = fn () => new OpenAIVisionAdapter(
+            apiKey: (string) env('OPENAI_API_KEY'),
+            model: (string) env('OPENAI_MODEL', 'gpt-4o'),
         );
 
         $this->app->bind(SpeciesIdentifier::class, $factory);
-        $this->app->bind(OpenRouterVisionAdapter::class, $factory);
+        $this->app->bind(OpenAIVisionAdapter::class, $factory);
     }
 
     public function boot(): void
