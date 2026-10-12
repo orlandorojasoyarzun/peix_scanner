@@ -111,7 +111,7 @@ class IdentifySpeciesAction
 
         if ($kept === []) {
             throw IdentificationFailedException::fromProvider(
-                'openrouter',
+                'openai',
                 IdentificationFailedException::REASON_PARSE_FAILED,
                 ['reason_detail' => 'all_candidates_off_list'],
             );

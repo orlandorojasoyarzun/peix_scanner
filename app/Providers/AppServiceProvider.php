@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Domain\Ai\Adapters\OpenAIVisionAdapter;
-use App\Domain\Ai\Adapters\OpenRouterVisionAdapter;
 use App\Domain\Ai\Contracts\SpeciesIdentifier;
-use App\Domain\Ai\Support\OpenRouterCircuitBreaker;
 use App\Support\ScanStateStore;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -32,16 +30,11 @@ class AppServiceProvider extends ServiceProvider
         'https://api.nal.usda.gov/*',
         'https://en.wikipedia.org/*',
         'https://upload.wikimedia.org/*',
-        'https://openrouter.ai/*',
         'https://api.openai.com/*',
     ];
 
     public function register(): void
     {
-        $this->app->singleton(OpenRouterCircuitBreaker::class, function ($app) {
-            return new OpenRouterCircuitBreaker($app->make('cache')->store());
-        });
-
         $this->app->singleton(ScanStateStore::class, function ($app) {
             return new ScanStateStore($app->make('cache')->store());
         });
