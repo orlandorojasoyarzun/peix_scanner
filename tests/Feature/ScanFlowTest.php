@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Application\Actions\IdentifySpeciesAction;
+use App\Domain\Ai\Adapters\OpenAIVisionAdapter;
 use App\Domain\Ai\DTOs\IdentificationResult;
 use App\Domain\Ai\Exceptions\IdentificationFailedException;
 use Illuminate\Http\UploadedFile;
@@ -239,7 +240,7 @@ it('shows an error page when AI fails to identify', function () {
     $this->mock(IdentifySpeciesAction::class, function ($mock) {
         $mock->shouldReceive('execute')
             ->once()
-            ->andThrow(IdentificationFailedException::fromProvider('openrouter', IdentificationFailedException::REASON_PARSE_FAILED));
+            ->andThrow(IdentificationFailedException::fromProvider('openai', IdentificationFailedException::REASON_PARSE_FAILED));
     });
 
     $response = $this->post(route('scan.store'), [
@@ -321,7 +322,7 @@ it('does not show goal selector pills anymore', function () {
 it('returns AI explanation as JSON when explanation endpoint is called', function () {
     Cache::flush();
 
-    $this->mock(\App\Domain\Ai\Adapters\OpenRouterVisionAdapter::class, function ($mock) {
+    $this->mock(OpenAIVisionAdapter::class, function ($mock) {
         $mock->shouldReceive('generateText')
             ->once()
             ->andReturn('Es un pescado ideal para deportistas por su perfil magro y alto en proteínas.');
